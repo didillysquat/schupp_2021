@@ -7,6 +7,10 @@ at two time points.
 Sam has sent me over some big excel sheets that contain all of the information we need:
 esentially linking sample names to sequencing files.
 The sample names were previously generated from the seq_files. We will continue to do it this way.
+
+The Big excel files that Sam sent over was not really usable. I sent him a different datasheet for him to fill out
+that we will now work with. It is called all_schupp_data_sam_filled. We will use this to make a
+SymPortal datasheet so that we can get the samples back into the analysis.
 """
 
 import pandas as pd
@@ -17,7 +21,7 @@ class SchuppAnalysis:
         self.file_list_two_path = '/Users/humebc/Google_Drive/projects/schupp_larval/file_list_two.txt'
         self.seq_filename_list = self._make_filename_list()
 
-        self.path_to_info_spread = '/Users/humebc/Google_Drive/projects/schupp_larval/all_shupp_data.xlsx'
+        self.path_to_info_spread = '/Users/humebc/Google_Drive/projects/schupp_larval/all_schupp_data_sam_filled.xlsx'
         self.info_df = self._make_info_df()
 
         # Make a dataframe that we can output as a csv that can then be pasted into the Symportal df
@@ -41,33 +45,48 @@ class SchuppAnalysis:
 
         # If we get here then we know we have exact matches for each of the sample names
         # Now populate a 2D list that will be convereted into a df
+
         df_list = []
         for index_name in self.info_df.index:
-            # There are some corallimorphs in the seq files for some reason. Ignore these.
-            if self.info_df.at[index_name, 'Species'] == 'corallimorphs':
-                continue
             row = []
             row.append(index_name)
             row.extend(ind_to_seq_dict[index_name])
-            row.append('coral_aquarium')
-            if self.info_df.at[index_name, 'Species'] == 'A. digitifera':
+
+            # Sample type
+            if self.info_df.at[index_name, 'age'] != 'adult':
+                row.append('coral_aquarium')
+            elif self.info_df.at[index_name, 'age'] == 'adult':
+                row.append('coral_field')
+
+            # Taxa info
+            if self.info_df.at[index_name, 'Species'].rstrip() == 'A. digitifera':
                 row.extend(['Cnidaria', 'Anthozoa', 'Scleractinia', 'Acroporidae', 'Acropora', 'digitifera'])
-            elif 'surculosa' in self.info_df.at[index_name, 'Species']:
+            elif self.info_df.at[index_name, 'Species'].rstrip() == 'A. hyacinthus':
                 row.extend(['Cnidaria', 'Anthozoa', 'Scleractinia', 'Acroporidae', 'Acropora', 'surculosa'])
-            elif 'Leptastrea' in self.info_df.at[index_name, 'Species'] or 'purpurea' in self.info_df.at[index_name, 'Species']:
+            elif self.info_df.at[index_name, 'Species'].rstrip() == 'L. purpurea':
                 row.extend(['Cnidaria', 'Anthozoa', 'Scleractinia', 'incertae sedis', 'Leptastrea', 'purpurea'])
-            elif self.info_df.at[index_name, 'Species'] == 'P. damicornis' or 'Pocillopora' in self.info_df.at[index_name, 'Species']:
+            elif self.info_df.at[index_name, 'Species'].rstrip() == 'P. damicornis':
                 row.extend(['Cnidaria', 'Anthozoa', 'Scleractinia', 'Pocilloporidae', 'Pocillopora', 'damicornis'])
             else:
-                raise RuntimeError(f'Unrecognised species for {index_name}')
+                raise RuntimeError(f'Unrecognised species of {self.info_df.at[index_name, "Species"]} for {index_name}')
 
-        # I was going to append the rest of the meta info to the datasheet but it is all a bit of a mess
-        foo = 'asdf'
+            # Additional meta info
+            # So that we can use this df as a single meta info file when making the figures etc we will include
+            # info on temp tank and age.
+            row.append(self.info_df.at[index_name, 'temp'])
+            row.append(self.info_df.at[index_name, 'tank'])
+            row.append(self.info_df.at[index_name, 'age'])
+            df_list.append(row)
+        headers_with_meta = self.sp_df_headers[:-4] + ['temp', 'tank', 'age']
+        sp_df = pd.DataFrame(df_list, columns=headers_with_meta)
+        sp_df.to_csv('sp_df.csv', index=False)
+        return sp_df
 
     def _make_info_df(self):
         info_df = pd.read_excel(
             io=self.path_to_info_spread, header=0)
-        info_df.set_index('seq_file', inplace=True, drop=True)
+        assert(len(info_df['name'].index) == len(set(info_df['name'].index)))
+        info_df.set_index('name', inplace=True, drop=True)
         return info_df
 
     def _make_filename_list(self):
