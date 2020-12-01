@@ -1,3 +1,15 @@
 *.DS_store
 outputs_round_two
 old
+.idea/
+all_shupp_data.xlsx
+all_schupp*
+file_list*
+new_organisation_20201201/20201018_schupp_all
+new_organisation_20201201/restrepo_for_reference.py
+new_organisation_20201201/20201018_schupp_all_data_datasheet.xlsx
+new_organisation_20201201/schupp_et_al_physiological_coral_data.xlsx
+~
+~*
+DIV_Symportal_Data_by_sam
+sp_df.csv

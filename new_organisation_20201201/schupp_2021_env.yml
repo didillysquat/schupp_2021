@@ -1,0 +1,9 @@
+name: schupp_2021_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.8
+  - matplotlib
+  - pandas
+  - xlrd
