@@ -49,7 +49,7 @@ class schupp_figures:
             'Acropora digitifera', 'Acropora hyacinthus', 'Pocillopora damicornis', 'Leptastrea purpurea'
         ]
         self.species_short = ['ad', 'ah', 'pd', 'lp']
-        self.data_types = ['adult_survival', 'adult_zooxs', 'recruit_survival', 'recruit_growth', 'recruit_fv_fm']
+        self.data_types = ['adult_survival', 'adult_zooxs', 'recruit_survival', 'recruit_size_fv_fm', 'recruit_zooxs']
 
         # Dataframe
         # We want to create one single dataframe that holds all of the physiology data.
@@ -66,7 +66,7 @@ class schupp_figures:
         # The physiology dataframe will have species, adult_recruit, tank, rack, plate_row, plate_no
         self.phys_df = pd.DataFrame(columns=[
             'species', 'adult_recruit', 'time_value', 'time_unit', 'tank', 'rack',
-            'temperature', 'exp_type', 'plate_col', 'plate_row', 'cyl_vol', 'fv_fm'
+            'temperature', 'exp_type', 'rack_col', 'rack_row', 'cyl_vol', 'fv_fm'
         ])
 
         # get the survial data
@@ -82,6 +82,16 @@ class schupp_figures:
                     xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_survival_bh')
                     self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
                                             adult_recruit='recruit', time_unit='month', exp_type='main')
+
+                elif data_type == 'recruit_size_fv_fm':
+                    # The data is in a very complex layout
+                    # The following pseudocode will be used to get it all into a usable format
+                    # Some individual have both PAM and size, some only size, some only PAM
+                    # We should first log all of the individual. An idividual is identified
+                    # by the combination of a time and a location in a tank (tank, rack, row, col)
+                    # Once we have all of the individuals logged we can go back through the individual and
+                    # search to see what data is available and log the avilable data
+                    xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_size_fv_fm_bh')
                 foo = 'bar'
         self.survival_df = pd.DataFrame(
             columns=['species', 'adult_recruit', 'time_value', 'time_unit', 'tank', 'temperature', 'exp_type',
