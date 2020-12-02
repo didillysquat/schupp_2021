@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from collections import defaultdict
 import numpy as np
+import re
 
 
 class schupp_figures:
@@ -62,7 +63,6 @@ class schupp_figures:
 
         fv_fm_size_data, survival_data = self._populate_data_holders()
         self.survival_df, self.fv_fm_size_df = self._make_survival_fv_fm_size_dfs(fv_fm_size_data, survival_data)
-
 
 
         # Figure
@@ -95,7 +95,11 @@ class schupp_figures:
         for sp in self.species_short:
             for data_type in self.data_types:
                 if data_type == 'adult_survival':
-                    self._populate_adult_survival(sp, survival_data)
+                    if sp in ['ad', 'ah']:
+                        self._populate_adult_survival(sp, survival_data)
+                    else:
+                        # There is no adult survival data for pd or lp
+                        pass
 
                 elif data_type == 'recruit_survival':
                     self._populate_recruit_survival(sp, survival_data)
@@ -123,8 +127,8 @@ class schupp_figures:
         fv_fm_size_dd = defaultdict(dict)
         xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_size_fv_fm_bh')
         for ind in xl_df.index:
-            self._populate_fv_fm_sample_rows(ind=ind, fv_fm_size_dd=fv_fm_size_dd, xl_df=xl_df, param='yield')
-            self._populate_fv_fm_sample_rows(ind, fv_fm_size_dd, xl_df, 'cylinder_vol')
+            self._populate_fv_fm_sample_rows(ind=ind, fv_fm_size_dd=fv_fm_size_dd, xl_df=xl_df, param='yield', sp=sp)
+            self._populate_fv_fm_sample_rows(ind, fv_fm_size_dd, xl_df, 'cylinder_vol', sp=sp)
         return fv_fm_size_dd
 
     def _populate_recruit_survival(self, sp, survival_data):
@@ -137,14 +141,25 @@ class schupp_figures:
         self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
                                 adult_recruit='adult', time_unit='day', exp_type='main')
 
-    def _populate_fv_fm_sample_rows(self, ind, fv_fm_size_dd, xl_df, param):
-        ident = f"{xl_df.at[ind, 'temp']}_{xl_df.at[ind, 'tank']}_{xl_df.at[ind, 'rack'][0]}_" \
+    def _populate_fv_fm_sample_rows(self, ind, fv_fm_size_dd, xl_df, param, sp):
+        # The rack number is not so straight forward to ascertain.
+        # For the ad and ah we can use the first character alone of the 'rack' value
+        # For the pd we need to extract the number from the 'rack' value.
+        if sp == 'pd':
+            rack_match = re.compile('\d+')
+            rack = rack_match.findall(xl_df.at[ind, 'rack'])[0]
+            if len(rack) > 1:
+                foo = 'bar'
+        elif sp in ['ad', 'ah', 'lp']:
+            rack = xl_df.at[ind, 'rack'][0]
+
+        ident = f"{xl_df.at[ind, 'temp']}_{xl_df.at[ind, 'tank']}_{rack}_" \
                 f"{xl_df.at[ind, 'rack_row']}_{xl_df.at[ind, 'rack_col']}_{xl_df.at[ind, 'time']}"
         if not np.isnan(xl_df.at[ind, param]):
             # Then there is a valid yield for this sample
             if ident in fv_fm_size_dd.keys():
                 # Check to see if valid param already exists
-                self._check_valid_param_val_doesnt_exist(ident, param, fv_fm_size_dd)
+                self._check_valid_param_val_doesnt_exist(ident, param, fv_fm_size_dd, sp)
             else:
                 # no need to check
                 pass
@@ -161,13 +176,13 @@ class schupp_figures:
             else:
                 fv_fm_size_dd[ident]['time'] = xl_df.at[ind, 'time']
 
-    def _check_valid_param_val_doesnt_exist(self, ident, param, fv_fm_size_dd):
+    def _check_valid_param_val_doesnt_exist(self, ident, param, fv_fm_size_dd, sp):
         if param not in fv_fm_size_dd[ident].keys():
             return
         elif np.isnan(fv_fm_size_dd[ident][param]):
             return
         else:
-            print(f'A valid {param} value already exists for {ident}')
+            print(f'A valid {param} value already exists for {ident} for {sp}')
 
 
     def _pop_survival_data(self, survival_data, xl_df, species, adult_recruit, time_unit, exp_type):
