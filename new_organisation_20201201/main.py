@@ -64,7 +64,6 @@ class schupp_figures:
         fv_fm_size_data, survival_data = self._populate_data_holders()
         self.survival_df, self.fv_fm_size_df = self._make_survival_fv_fm_size_dfs(fv_fm_size_data, survival_data)
 
-
         # Figure
         # 10 wide, 6 deep
         self.fig = plt.figure(figsize=(10, 6))
@@ -75,6 +74,32 @@ class schupp_figures:
             for j, data_type in enumerate(self.data_types):
                 # create a plot
                 self.axes[i].append(plt.subplot(self.gs[j, i]))
+
+    def plot_fig_1(self):
+        """
+        The main plotting method for plotting up the figure that has the four species columns with a plot
+        for each of the data types.
+        """
+        for i, sp in enumerate(self.species_short):
+            for j, data_type in enumerate(self.data_types):
+                if data_type == 'adult_survival':
+                    if sp in ['ad', 'ah']:
+                        # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
+                        ax = self.axes[j][i]
+                        # We will need to do an ax.errorbar for each of the temperatures
+                        working_df = self.survival_df[(self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
+                        working_df['survival_percent'] = (working_df['survival'] / 5) * 100
+                        for temp in working_df['temperature'].unique():
+                            ser = working_df[working_df['temperature'] == temp]
+                            # Calc average survival for each time point and the standard error of the mean
+                            means = [ser[ser['time_value'] == time_val]['survival_percent'].mean() for time_val in ser['time_value'].unique()]
+                            sem = [ ser[ser['time_value'] == time_val]['survival_percent'].sem() for time_val in ser['time_value'].unique()]
+                            ax.errorbar(x=ser['time_value'].unique(), y=means, yerr=sem)
+                        foo = 'bar'
+                    else:
+                        pass
+
+
 
     def _make_survival_fv_fm_size_dfs(self, fv_fm_size_data, survival_data):
         survival_df = pd.DataFrame(
@@ -87,7 +112,8 @@ class schupp_figures:
                 'species', 'adult_recruit', 'time_value', 'time_unit', 'temp', 'tank', 'rack',
                 'rack_row', 'rack_col', 'cyl_vol', 'fv_fm', 'exp_type',
             ])
-        return fv_fm_size_df, survival_df
+        survival_df['survival_percent'] = 5 - survival_df['survival'] * 100
+        return survival_df, fv_fm_size_df
 
     def _populate_data_holders(self):
         survival_data = []
@@ -207,4 +233,4 @@ class schupp_figures:
                 xl_df.iat[row, col]
                             ])
 
-schupp_figures()
+schupp_figures().plot_fig_1()
