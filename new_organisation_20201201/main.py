@@ -34,6 +34,8 @@ import matplotlib as mpl
 mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from collections import defaultdict
+import numpy as np
 
 
 class schupp_figures:
@@ -54,48 +56,15 @@ class schupp_figures:
         # Dataframe
         # We want to create one single dataframe that holds all of the physiology data.
         # We will hold the zooxs data in seperate dataframes that we will create from the SP outputs
-        # TODO refactor
         # For the physiology data we will need a dataframe for survival and one for growth and fv_fm
         # This is because survival was assesed as a batch (i.e. 3 dead out of 5), while the growth and fv_fm
         # were done on a persample basis.
 
-        # The survival df will have species, adult_recruit, time_value, time_unit, tank, temperature, exp_type
-        # NB exp type will be 'main' or 'delayed'.
+        fv_fm_size_data, survival_data = self._populate_data_holders()
+        self.survival_df, self.fv_fm_size_df = self._make_survival_fv_fm_size_dfs(fv_fm_size_data, survival_data)
 
 
-        # The physiology dataframe will have species, adult_recruit, tank, rack, plate_row, plate_no
-        self.phys_df = pd.DataFrame(columns=[
-            'species', 'adult_recruit', 'time_value', 'time_unit', 'tank', 'rack',
-            'temperature', 'exp_type', 'rack_col', 'rack_row', 'cyl_vol', 'fv_fm'
-        ])
 
-        # get the survial data
-        survival_data = []
-        for sp in self.species_short:
-            for data_type in self.data_types:
-                if data_type == 'adult_survival':
-                    xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_adult_survival_bh')
-                    self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
-                                    adult_recruit='adult',time_unit='day', exp_type='main')
-
-                elif data_type == 'recruit_survival':
-                    xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_survival_bh')
-                    self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
-                                            adult_recruit='recruit', time_unit='month', exp_type='main')
-
-                elif data_type == 'recruit_size_fv_fm':
-                    # The data is in a very complex layout
-                    # The following pseudocode will be used to get it all into a usable format
-                    # Some individual have both PAM and size, some only size, some only PAM
-                    # We should first log all of the individual. An idividual is identified
-                    # by the combination of a time and a location in a tank (tank, rack, row, col)
-                    # Once we have all of the individuals logged we can go back through the individual and
-                    # search to see what data is available and log the avilable data
-                    xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_size_fv_fm_bh')
-                foo = 'bar'
-        self.survival_df = pd.DataFrame(
-            columns=['species', 'adult_recruit', 'time_value', 'time_unit', 'tank', 'temperature', 'exp_type',
-                     'survival'])
         # Figure
         # 10 wide, 6 deep
         self.fig = plt.figure(figsize=(10, 6))
@@ -106,6 +75,100 @@ class schupp_figures:
             for j, data_type in enumerate(self.data_types):
                 # create a plot
                 self.axes[i].append(plt.subplot(self.gs[j, i]))
+
+    def _make_survival_fv_fm_size_dfs(self, fv_fm_size_data, survival_data):
+        survival_df = pd.DataFrame(
+            data=survival_data,
+            columns=['species', 'adult_recruit', 'time_value', 'time_unit', 'tank', 'temperature', 'exp_type',
+                     'survival'])
+        fv_fm_size_df = pd.DataFrame(
+            data=fv_fm_size_data,
+            columns=[
+                'species', 'adult_recruit', 'time_value', 'time_unit', 'temp', 'tank', 'rack',
+                'rack_row', 'rack_col', 'cyl_vol', 'fv_fm', 'exp_type',
+            ])
+        return fv_fm_size_df, survival_df
+
+    def _populate_data_holders(self):
+        survival_data = []
+        fv_fm_size_data = []
+        for sp in self.species_short:
+            for data_type in self.data_types:
+                if data_type == 'adult_survival':
+                    self._populate_adult_survival(sp, survival_data)
+
+                elif data_type == 'recruit_survival':
+                    self._populate_recruit_survival(sp, survival_data)
+
+                elif data_type == 'recruit_size_fv_fm':
+                    fv_fm_size_dd = self._populate_recruit_fv_fm_size_dd(sp)
+                    self._populate_recruit_fv_fm_size_data(fv_fm_size_data, fv_fm_size_dd, sp)
+        return fv_fm_size_data, survival_data
+
+    def _populate_recruit_fv_fm_size_data(self, fv_fm_size_data, fv_fm_size_dd, sp):
+        # At this point we have the dict populated and we can now populate the fv_fm_size_data
+        for k in fv_fm_size_dd.keys():
+            temp, tank, rack, rack_row, rack_col, time = k.split('_')
+            fv_fm_size_data.append([
+                sp, 'recruit', int(time), 'month',
+                temp, tank, rack, rack_row, rack_col,
+                fv_fm_size_dd[k]['cylinder_vol'], fv_fm_size_dd[k]['yield'], 'main'
+            ])
+
+    def _populate_recruit_fv_fm_size_dd(self, sp):
+        # A dictionary where identifier is key and value is a dict with keys of 'fv_fm' and 'cyl_vol
+        # Identifier will be made in the form "{temp}_{tank}_{rack}_{rack_row}_{rack_row}"
+        # We will place numpy.np for val if no val is available
+        # We will check to see that there are not duplicate entries for a given sample and data_type
+        fv_fm_size_dd = defaultdict(dict)
+        xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_size_fv_fm_bh')
+        for ind in xl_df.index:
+            self._populate_fv_fm_sample_rows(ind=ind, fv_fm_size_dd=fv_fm_size_dd, xl_df=xl_df, param='yield')
+            self._populate_fv_fm_sample_rows(ind, fv_fm_size_dd, xl_df, 'cylinder_vol')
+        return fv_fm_size_dd
+
+    def _populate_recruit_survival(self, sp, survival_data):
+        xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_survival_bh')
+        self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
+                                adult_recruit='recruit', time_unit='month', exp_type='main')
+
+    def _populate_adult_survival(self, sp, survival_data):
+        xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_adult_survival_bh')
+        self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
+                                adult_recruit='adult', time_unit='day', exp_type='main')
+
+    def _populate_fv_fm_sample_rows(self, ind, fv_fm_size_dd, xl_df, param):
+        ident = f"{xl_df.at[ind, 'temp']}_{xl_df.at[ind, 'tank']}_{xl_df.at[ind, 'rack'][0]}_" \
+                f"{xl_df.at[ind, 'rack_row']}_{xl_df.at[ind, 'rack_col']}_{xl_df.at[ind, 'time']}"
+        if not np.isnan(xl_df.at[ind, param]):
+            # Then there is a valid yield for this sample
+            if ident in fv_fm_size_dd.keys():
+                # Check to see if valid param already exists
+                self._check_valid_param_val_doesnt_exist(ident, param, fv_fm_size_dd)
+            else:
+                # no need to check
+                pass
+            fv_fm_size_dd[ident][param] = float(xl_df.at[ind, param])
+
+            if 'time' in fv_fm_size_dd[ident].keys():
+                assert(xl_df.at[ind, 'time'] == fv_fm_size_dd[ident]['time'])
+            else:
+                fv_fm_size_dd[ident]['time'] = xl_df.at[ind, 'time']
+        else:
+            fv_fm_size_dd[ident][param] = np.nan
+            if 'time' in fv_fm_size_dd[ident].keys():
+                assert (xl_df.at[ind, 'time'] == fv_fm_size_dd[ident]['time'])
+            else:
+                fv_fm_size_dd[ident]['time'] = xl_df.at[ind, 'time']
+
+    def _check_valid_param_val_doesnt_exist(self, ident, param, fv_fm_size_dd):
+        if param not in fv_fm_size_dd[ident].keys():
+            return
+        elif np.isnan(fv_fm_size_dd[ident][param]):
+            return
+        else:
+            print(f'A valid {param} value already exists for {ident}')
+
 
     def _pop_survival_data(self, survival_data, xl_df, species, adult_recruit, time_unit, exp_type):
         for row in range(len(xl_df.index)):
