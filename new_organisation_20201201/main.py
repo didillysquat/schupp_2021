@@ -90,35 +90,119 @@ class schupp_figures:
         for i, sp in enumerate(self.species_short):
             for j, data_type in enumerate(self.data_types):
                 if data_type == 'adult_survival':
-                    self._plot_adult_survival(i, j, sp)
+                    self._plot_adult_survival(i, j, sp, data_type)
+                elif data_type == 'recruit_survival':
+                    # This is slightly more complicated because we need to work with the travel
+                    # To highlight this I think it will be a good idea to have a vertical
+                    # line or to shade the backgrounds a different colour
+                    ax = self.axes[i][j]
+                    # We will need to do an ax.errorbar for each of the temperatures
+                    working_df = self.survival_df[
+                        (self.survival_df['adult_recruit'] == 'recruit') & (self.survival_df['species'] == sp)]
+                    # The survival percent calculation will depend on the species because there were slightly
+                    # different time points for each of the species.
+                    # For the time points measured before moving, the survival will be the value divided by
+                    # the starting value * 100
+                    # For ad, ah and lp any time value < 4 is a before shipment point and any => 4 is after.
+                    # For pd <3 is before and >= 3 is after
+                    if sp in ['ad', 'ah', 'lp']:
+                        # first get the starting survivals and plug these into a dict
+                        # There will be one per tank
+                        # Pull out the time 0s into a series
+                        # The for each row get a tank
+                        # Then make these k, v pairs in dict
+                        time_zero_df = working_df[working_df['time_value'] == 0]
+                        time_zero_dict = {}
+                        for ind in time_zero_df.index:
+                            tank = self.survival_df.at[ind, 'tank']
+                            time_zero_dict[tank] = time_zero_df.at[ind, 'survival']
 
-    def _plot_adult_survival(self, i, j, sp):
+                        # First create a dict that holds the survial percentages for the last measurement before
+                        # the move
+                        time_last_before_dict = {}
+                        if sp in ['ad', 'ah']:
+                            time_last_before_df = working_df[working_df['time_value'] == 3]
+                        elif sp == 'lp':
+                            time_last_before_df = working_df[working_df['time_value'] == 3.9]
+                        else:
+                            raise RuntimeError(f'Unexpected species short {sp}')
+                        for ind in time_last_before_df.index:
+                            tank = time_last_before_df.at[ind, 'tank']
+                            time_last_before_dict[tank] = (time_last_before_df.at[ind, 'survival']/time_zero_dict[tank])*100
+
+                        # Secondly, we want a dict that given a tank we will be able to get the
+                        # time_first_after_survival. I.e. the first survival point after the move
+                        time_first_after_survival_dict = {}
+                        time_first_after_df = working_df[working_df['time_value'] == 4]
+                        for ind in time_first_after_df.index:
+                            tank = time_first_after_df.at[ind, 'tank']
+                            time_first_after_survival_dict[tank] = time_first_after_df.at[ind, 'survival']
+
+                        # Now that we have the time_last_before_dict we will be able to work out the survival_percentage
+                        # for the samples after the move
+
+                        # Finally calculate the survival percentages for all samples
+                        survival_percent = []
+                        for ind in working_df.index:
+                            tank = working_df.at[ind, 'tank']
+                            if working_df.at[ind, 'time_value'] < 4:
+                                # Then we want to calculate against the start value
+                                survival_percent.append((working_df.at[ind, 'survival']/time_zero_dict[tank])*100)
+                            else:
+                                # The percentage survial for the given sample at the last time point before move
+                                time_last_before_survival = time_last_before_dict[tank]
+                                # The absolute survial value for the given sample at the first time point after move
+                                time_first_after_survival = time_first_after_survival_dict[tank]
+                                # The decrease in survial for current time point from the last time point before move
+                                survival_decrease_percent_after = ((time_first_after_survival - working_df.at[ind, 'survival']) / time_first_after_survival) * 100
+                                # Finally, the survival percentage that we want to store is the
+                                # survival_decrease_percent_after subtracted from the time_last_before_survival
+                                survival_percent.append(time_last_before_survival - survival_decrease_percent_after)
+                        working_df['survival_percent'] = survival_percent
+                    # Now we can finally plot
+                    # Similar to the adults we want to do an ax.errorbar for each of the temperatures
+                    self._plot_a_set_of_line_data(ax, data_type, sp, working_df)
+                    foo = 'bar'
+
+    def _plot_a_set_of_line_data(self, ax, data_type, sp, working_df):
+        for temp in working_df['temperature'].unique():
+            ser = working_df[working_df['temperature'] == temp]
+            # Calc average survival for each time point and the standard error of the mean
+            means = [ser[ser['time_value'] == time_val]['survival_percent'].mean() for time_val in
+                     ser['time_value'].unique()]
+            sem = [ser[ser['time_value'] == time_val]['survival_percent'].sem() for time_val in
+                   ser['time_value'].unique()]
+            ax.errorbar(
+                x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+                linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
+                elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
+                label=f'{temp}{DEGREE_SIGN}C'
+            )
+        ax.set_ylim(-10,110)
+        time_unit = working_df['time_unit'].unique()[0]
+        if time_unit == 'days':
+            ax.set_xticks([0,5,10,15,20,25])
+        elif time_unit == 'months':
+            ax.set_xticks([0,3,6,9,12])
+        ax.set_xlim()
+        ax.legend(loc='lower left', fontsize='xx-small')
+        ax.set_xlabel(time_unit, fontsize='xx-small')
+        if sp == 'ad':
+            # only set one per row
+            ax.set_ylabel('survial %', fontsize='xx-small')
+        if data_type == 'adult_survival':
+            ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
+        plt.tight_layout()
+
+    def _plot_adult_survival(self, i, j, sp, data_type):
         if sp in ['ad', 'ah']:
             # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
-            ax = self.axes[j][i]
+            ax = self.axes[i][j]
             # We will need to do an ax.errorbar for each of the temperatures
             working_df = self.survival_df[
                 (self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
             working_df['survival_percent'] = (working_df['survival'] / 5) * 100
-            for temp in working_df['temperature'].unique():
-                ser = working_df[working_df['temperature'] == temp]
-                # Calc average survival for each time point and the standard error of the mean
-                means = [ser[ser['time_value'] == time_val]['survival_percent'].mean() for time_val in
-                         ser['time_value'].unique()]
-                sem = [ser[ser['time_value'] == time_val]['survival_percent'].sem() for time_val in
-                       ser['time_value'].unique()]
-                ax.errorbar(
-                    x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
-                    linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
-                    elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2, label=f'{temp}{DEGREE_SIGN}C'
-                )
-            ax.legend(loc='lower left', fontsize='xx-small')
-            ax.set_xlabel('days', fontsize='xx-small')
-            if sp == 'ad':
-                # only set one per row
-                ax.set_ylabel('survial %', fontsize='xx-small')
-            ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
-            plt.tight_layout()
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df)
             foo = 'bar'
         else:
             # Then the data does not exist.
@@ -132,10 +216,10 @@ class schupp_figures:
         fv_fm_size_df = pd.DataFrame(
             data=fv_fm_size_data,
             columns=[
-                'species', 'adult_recruit', 'time_value', 'time_unit', 'temp', 'tank', 'rack',
+                'species', 'adult_recruit', 'time_value', 'time_unit', 'temperature', 'tank', 'rack',
                 'rack_row', 'rack_col', 'cyl_vol', 'fv_fm', 'exp_type',
             ])
-        survival_df['survival_percent'] = 5 - survival_df['survival'] * 100
+
         return survival_df, fv_fm_size_df
 
     def _populate_data_holders(self):
@@ -163,7 +247,7 @@ class schupp_figures:
         for k in fv_fm_size_dd.keys():
             temp, tank, rack, rack_row, rack_col, time = k.split('_')
             fv_fm_size_data.append([
-                sp, 'recruit', int(time), 'month',
+                sp, 'recruit', int(time), 'months',
                 temp, tank, rack, rack_row, rack_col,
                 fv_fm_size_dd[k]['cylinder_vol'], fv_fm_size_dd[k]['yield'], 'main'
             ])
@@ -183,27 +267,18 @@ class schupp_figures:
     def _populate_recruit_survival(self, sp, survival_data):
         xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_recruit_survival_bh')
         self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
-                                adult_recruit='recruit', time_unit='month', exp_type='main')
+                                adult_recruit='recruit', time_unit='months', exp_type='main')
 
     def _populate_adult_survival(self, sp, survival_data):
         xl_df = pd.read_excel(io=self.physiological_data_path, sheet_name=f'{sp}_adult_survival_bh')
         self._pop_survival_data(survival_data=survival_data, xl_df=xl_df, species=sp,
-                                adult_recruit='adult', time_unit='day', exp_type='main')
+                                adult_recruit='adult', time_unit='days', exp_type='main')
 
     def _populate_fv_fm_sample_rows(self, ind, fv_fm_size_dd, xl_df, param, sp):
         # The rack number is not so straight forward to ascertain.
         # For the ad and ah we can use the first character alone of the 'rack' value
         # For the pd we need to extract the number from the 'rack' value.
-        if sp == 'pd':
-            rack_match = re.compile('\d+')
-            rack = rack_match.findall(xl_df.at[ind, 'rack'])[0]
-            if len(rack) > 1:
-                foo = 'bar'
-        elif sp in ['ad', 'ah', 'lp']:
-            rack = xl_df.at[ind, 'rack'][0]
-
-        ident = f"{xl_df.at[ind, 'temp']}_{xl_df.at[ind, 'tank']}_{rack}_" \
-                f"{xl_df.at[ind, 'rack_row']}_{xl_df.at[ind, 'rack_col']}_{xl_df.at[ind, 'time']}"
+        ident = self._get_ident(ind, sp, xl_df)
         if not np.isnan(xl_df.at[ind, param]):
             # Then there is a valid yield for this sample
             if ident in fv_fm_size_dd.keys():
@@ -224,6 +299,23 @@ class schupp_figures:
                 assert (xl_df.at[ind, 'time'] == fv_fm_size_dd[ident]['time'])
             else:
                 fv_fm_size_dd[ident]['time'] = xl_df.at[ind, 'time']
+
+    def _get_ident(self, ind, sp, xl_df):
+        if sp == 'pd':
+            rack_match = re.compile('\d+')
+            rack = rack_match.findall(xl_df.at[ind, 'rack'])[0]
+            if len(rack) > 1:
+                foo = 'bar'
+        elif sp in ['ad', 'ah', 'lp']:
+            rack = xl_df.at[ind, 'rack'][0]
+        ident = f"{xl_df.at[ind, 'temp']}_{xl_df.at[ind, 'tank']}_{rack}_" \
+                f"{xl_df.at[ind, 'rack_row']}_{xl_df.at[ind, 'rack_col']}_{xl_df.at[ind, 'time']}"
+        return ident
+
+    def _get_ident_from_df_no_time(self, ind, df):
+        ident = f"{df.at[ind, 'temperature']}_{df.at[ind, 'tank']}_{df.at[ind, 'rack']}_" \
+                f"{df.at[ind, 'rack_row']}_{df.at[ind, 'rack_col']}"
+        return ident
 
     def _check_valid_param_val_doesnt_exist(self, ident, param, fv_fm_size_dd, sp):
         if param not in fv_fm_size_dd[ident].keys():
