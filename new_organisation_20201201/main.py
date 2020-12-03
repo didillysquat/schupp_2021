@@ -37,6 +37,7 @@ import matplotlib.gridspec as gridspec
 from collections import defaultdict
 import numpy as np
 import re
+import itertools
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 
 
@@ -100,6 +101,13 @@ class schupp_figures:
         self.temp_plot_marker_dict = {29: "v", 30: "o", 31: "^", '29': "v", '30': "o", '31': "^"}
         self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#898989", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#898989", '31': "#0d0d0d"}
 
+        # Colour generators for seq and profile plotting
+        self.grey_iterator = itertools.cycle(['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F'])
+        self.colour_hash_iterator = iter(self.get_colour_list())
+        self.pre_def_seq_colour_dict = self.get_pre_def_colour_dict()
+        self.colour_palette_pas_gen = ('#%02x%02x%02x' % rgb_tup for rgb_tup in
+                                  self.create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=5000, num_cols=8,
+                                                          time_out_iterations=10000))
 
     def _get_sp_dfs(self):
         """
