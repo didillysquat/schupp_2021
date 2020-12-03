@@ -38,6 +38,8 @@ from collections import defaultdict
 import numpy as np
 import re
 import itertools
+import sys
+import random
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 
 
@@ -86,7 +88,22 @@ class schupp_figures:
         self.sp_sample_name_to_sample_uid_dict = None
         self.sp_profile_uid_to_profile_name_dict = None
         self.sp_profile_name_to_profile_uid_dict = None
-        self.sp_datasheet_df, self.sp_seqs_df, self.sp_profile_meta_df, self.sp_profile_abund_df = self._get_sp_dfs()
+        self.sp_datasheet_df, self.sp_seq_abs_abund_df, self.sp_profile_meta_df, self.sp_profile_abs_abund_df = self._get_sp_dfs()
+        # Make the relative abundance dfs
+        self.sp_seq_rel_abund_df = self.sp_seq_abs_abund_df.div(
+            self.sp_seq_abs_abund_df.sum(axis=1), axis=0
+        )
+        self.sp_profile_rel_abund_df = self.sp_profile_abs_abund_df.div(
+            self.sp_profile_abs_abund_df.sum(axis=1), axis=0
+        )
+
+        # Reorder the abundance dataframes in order of most abundant sequences/profiles
+        sorted_seq_index = self.sp_seq_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
+        sorted_profile_index = self.sp_profile_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
+        self.sp_seq_rel_abund_df.reindex(sorted_seq_index, axis=1)
+        self.sp_seq_abs_abund_df.reindex(sorted_seq_index, axis=1)
+        self.sp_profile_rel_abund_df.reindex(sorted_profile_index, axis=1)
+        self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
 
         # Figure
         # 10 wide, 6 deep
@@ -103,11 +120,34 @@ class schupp_figures:
 
         # Colour generators for seq and profile plotting
         self.grey_iterator = itertools.cycle(['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F'])
-        self.colour_hash_iterator = iter(self.get_colour_list())
-        self.pre_def_seq_colour_dict = self.get_pre_def_colour_dict()
+        self.colour_hash_iterator = iter(self._get_colour_list())
+        self.pre_def_seq_colour_dict = self._get_pre_def_colour_dict()
         self.colour_palette_pas_gen = ('#%02x%02x%02x' % rgb_tup for rgb_tup in
-                                  self.create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=5000, num_cols=8,
-                                                          time_out_iterations=10000))
+                                  self._create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=5000, num_cols=8,
+                                                           time_out_iterations=10000))
+        self.seq_color_dict = self._make_seq_colour_dict()
+        self.prof_color_dict = self._make_profile_color_dict()
+
+    def _make_profile_color_dict(self):
+        prof_color_dict = {}
+        for prof_uid in list(self.sp_profile_rel_abund_df):
+            try:
+                prof_color_dict[prof_uid] = next(self.colour_palette_pas_gen)
+            except StopIteration:
+                prof_color_dict[prof_uid] = next(self.grey_iterator)
+        return prof_color_dict
+
+    def _make_seq_colour_dict(self):
+        seq_color_dict = {}
+        for seq_name in list(self.sp_seq_rel_abund_df):
+            if seq_name in self.pre_def_seq_colour_dict:
+                seq_color_dict[seq_name] = self.pre_def_seq_colour_dict[seq_name]
+            else:
+                try:
+                    seq_color_dict[seq_name] = next(self.colour_hash_iterator)
+                except StopIteration:
+                    seq_color_dict[seq_name] = next(self.grey_iterator)
+        return seq_color_dict
 
     def _get_sp_dfs(self):
         """
@@ -120,7 +160,6 @@ class schupp_figures:
 
         seq_count_df = self._make_sp_seq_abund_df()
 
-        # profile meta and abund df
         profile_abund_df, profile_meta_df = self._make_profile_dfs()
 
         return sp_ds_df, seq_count_df, profile_meta_df, profile_abund_df
@@ -177,6 +216,23 @@ class schupp_figures:
             for j, data_type in enumerate(self.data_types):
                 if data_type == 'adult_survival':
                     self._plot_adult_survival(i, j, sp, data_type)
+                if data_type == 'adult_zooxs':
+                    # There are only about 5 colonies for adults.
+                    # For the time being it probably makes sense to plot up the 'standard' seq and profile plots just
+                    # starting at the left of the plot axis and then we can see how it looks once we've worked
+                    # with the recruit zooxs as well.
+                    # Get the sample_uids that we are dealing with
+                    if sp == 'ad':
+                        sample_uids = [
+                            self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                                (self.sp_datasheet_df['age'] == 'adult') &
+                                (self.sp_datasheet_df['host_species'] == 'digitifera')
+                            ].index
+                        ]
+                        foo = 'bar'
+
+
+
                 elif data_type == 'recruit_survival':
                     self._plot_recruit_survival(data_type, i, j, sp)
                 elif data_type == 'recruit_size':
@@ -492,5 +548,115 @@ class schupp_figures:
                 # survival
                 xl_df.iat[row, col]
                             ])
+
+    def _create_colour_list(self,
+                            sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000,
+                            avoid_black_and_white=True):
+        new_colours = []
+        min_dist = []
+        attempt = 0
+        while len(new_colours) < num_cols:
+            attempt += 1
+            # Check to see if we have run out of iteration attempts to find a colour that fits into the colour space
+            if attempt > time_out_iterations:
+                sys.exit('Colour generation timed out. We have tried {} iterations of colour generation '
+                         'and have not been able to find a colour that fits into your defined colour space.\n'
+                         'Please lower the number of colours you are trying to find, '
+                         'the minimum distance between them, or both.'.format(attempt))
+            if mix_col:
+                r = int((random.randint(0, 255) + mix_col[0]) / 2)
+                g = int((random.randint(0, 255) + mix_col[1]) / 2)
+                b = int((random.randint(0, 255) + mix_col[2]) / 2)
+            else:
+                r = random.randint(0, 255)
+                g = random.randint(0, 255)
+                b = random.randint(0, 255)
+
+            # now check to see whether the new colour is within a given distance
+            # if the avoids are true also
+            good_dist = True
+            if sq_dist_cutoff:
+                dist_list = []
+                for i in range(len(new_colours)):
+                    distance = (new_colours[i][0] - r) ** 2 + (new_colours[i][1] - g) ** 2 + (
+                            new_colours[i][2] - b) ** 2
+                    dist_list.append(distance)
+                    if distance < sq_dist_cutoff:
+                        good_dist = False
+                        break
+                # now check against black and white
+                d_to_black = (r - 0) ** 2 + (g - 0) ** 2 + (b - 0) ** 2
+                d_to_white = (r - 255) ** 2 + (g - 255) ** 2 + (b - 255) ** 2
+                if avoid_black_and_white:
+                    if d_to_black < sq_dist_cutoff or d_to_white < sq_dist_cutoff:
+                        good_dist = False
+                if dist_list:
+                    min_dist.append(min(dist_list))
+            if good_dist:
+                new_colours.append((r, g, b))
+                attempt = 0
+
+        return new_colours
+
+    def _get_pre_def_colour_dict(self):
+        """These are the top 40 most abundnant named sequences. I have hardcoded their color."""
+        return {
+            'A1': "#FFFF00", 'C3': "#1CE6FF", 'C15': "#FF34FF", 'A1bo': "#FF4A46", 'D1': "#008941",
+            'C1': "#006FA6", 'C27': "#A30059", 'D4': "#FFDBE5", 'C3u': "#7A4900", 'C42.2': "#0000A6",
+            'A1bp': "#63FFAC", 'C115': "#B79762", 'C1b': "#004D43", 'C1d': "#8FB0FF", 'A1c': "#997D87",
+            'C66': "#5A0007", 'A1j': "#809693", 'B1': "#FEFFE6", 'A1k': "#1B4400", 'A4': "#4FC601",
+            'A1h': "#3B5DFF", 'C50a': "#4A3B53", 'C39': "#FF2F80", 'C3dc': "#61615A", 'D4c': "#BA0900",
+            'C3z': "#6B7900", 'C21': "#00C2A0", 'C116': "#FFAA92", 'A1cc': "#FF90C9", 'C72': "#B903AA",
+            'C15cl': "#D16100", 'C31': "#DDEFFF", 'C15cw': "#000035", 'A1bv': "#7B4F4B", 'D6': "#A1C299",
+            'A4m': "#300018", 'C42a': "#0AA6D8", 'C15cr': "#013349", 'C50l': "#00846F", 'C42g': "#372101"}
+
+    def _get_colour_list(self):
+        colour_list = [
+            "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", "#C2FF99", "#001E09", "#00489C", "#6F0062",
+            "#0CBD66",
+            "#EEC3FF", "#456D75", "#B77B68", "#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0",
+            "#BEC459",
+            "#456648", "#0086ED", "#886F4C", "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9",
+            "#FF913F",
+            "#938A81", "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", "#C8A1A1", "#1E6E00",
+            "#7900D7",
+            "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", "#D790FF", "#9B9700", "#549E79", "#FFF69F",
+            "#201625",
+            "#72418F", "#BC23FF", "#99ADC0", "#3A2465", "#922329", "#5B4534", "#FDE8DC", "#404E55", "#0089A3",
+            "#CB7E98",
+            "#A4E804", "#324E72", "#6A3A4C", "#83AB58", "#001C1E", "#D1F7CE", "#004B28", "#C8D0F6", "#A3A489",
+            "#806C66",
+            "#222800", "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59", "#8ADBB4", "#1E0200", "#5B4E51",
+            "#C895C5",
+            "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94", "#7ED379", "#012C58", "#7A7BFF", "#D68E01",
+            "#353339",
+            "#78AFA1", "#FEB2C6", "#75797C", "#837393", "#943A4D", "#B5F4FF", "#D2DCD5", "#9556BD", "#6A714A",
+            "#001325",
+            "#02525F", "#0AA3F7", "#E98176", "#DBD5DD", "#5EBCD1", "#3D4F44", "#7E6405", "#02684E", "#962B75",
+            "#8D8546",
+            "#9695C5", "#E773CE", "#D86A78", "#3E89BE", "#CA834E", "#518A87", "#5B113C", "#55813B", "#E704C4",
+            "#00005F",
+            "#A97399", "#4B8160", "#59738A", "#FF5DA7", "#F7C9BF", "#643127", "#513A01", "#6B94AA", "#51A058",
+            "#A45B02",
+            "#1D1702", "#E20027", "#E7AB63", "#4C6001", "#9C6966", "#64547B", "#97979E", "#006A66", "#391406",
+            "#F4D749",
+            "#0045D2", "#006C31", "#DDB6D0", "#7C6571", "#9FB2A4", "#00D891", "#15A08A", "#BC65E9", "#FFFFFE",
+            "#C6DC99",
+            "#203B3C", "#671190", "#6B3A64", "#F5E1FF", "#FFA0F2", "#CCAA35", "#374527", "#8BB400", "#797868",
+            "#C6005A",
+            "#3B000A", "#C86240", "#29607C", "#402334", "#7D5A44", "#CCB87C", "#B88183", "#AA5199", "#B5D6C3",
+            "#A38469",
+            "#9F94F0", "#A74571", "#B894A6", "#71BB8C", "#00B433", "#789EC9", "#6D80BA", "#953F00", "#5EFF03",
+            "#E4FFFC",
+            "#1BE177", "#BCB1E5", "#76912F", "#003109", "#0060CD", "#D20096", "#895563", "#29201D", "#5B3213",
+            "#A76F42",
+            "#89412E", "#1A3A2A", "#494B5A", "#A88C85", "#F4ABAA", "#A3F3AB", "#00C6C8", "#EA8B66", "#958A9F",
+            "#BDC9D2",
+            "#9FA064", "#BE4700", "#658188", "#83A485", "#453C23", "#47675D", "#3A3F00", "#061203", "#DFFB71",
+            "#868E7E",
+            "#98D058", "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C",
+            "#00B57F",
+            "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
+        return colour_list
 
 schupp_figures().plot_fig_1()
