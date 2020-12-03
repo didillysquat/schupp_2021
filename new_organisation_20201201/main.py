@@ -47,6 +47,19 @@ class schupp_figures:
         self.sp_datasheet_path = os.path.join(self.root_dir, '20201018_schupp_all_data_datasheet.xlsx')
         self.sp_data_path = os.path.join(self.root_dir, '20201018_schupp_all')
         self.physiological_data_path = os.path.join(self.root_dir, 'schupp_et_al_physiological_coral_data.xlsx')
+        self.sp_seq_count_path = os.path.join(
+            self.sp_data_path,
+            'post_med_seqs',
+            '125_20201018_DBV_20201020T020625.seqs.absolute.abund_and_meta.txt'
+        )
+        self.sp_profile_abund_path = os.path.join(
+            self.sp_data_path, 'its2_type_profiles',
+            '125_20201018_DBV_20201020T020625.profiles.absolute.abund_only.txt'
+        )
+        self.sp_profile_meta_path = os.path.join(
+            self.sp_data_path, 'its2_type_profiles',
+            '125_20201018_DBV_20201020T020625.profiles.meta_only.txt'
+        )
 
         # Datatypes and species
         self.species_full = [
@@ -68,6 +81,11 @@ class schupp_figures:
 
         fv_fm_size_data, survival_data = self._populate_data_holders()
         self.survival_df, self.fv_fm_size_df = self._make_survival_fv_fm_size_dfs(fv_fm_size_data, survival_data)
+        self.sp_sample_uid_to_sample_name_dict = None
+        self.sp_sample_name_to_sample_uid_dict = None
+        self.sp_profile_uid_to_profile_name_dict = None
+        self.sp_profile_name_to_profile_uid_dict = None
+        self.sp_datasheet_df, self.sp_seqs_df, self.sp_profile_df = self._get_sp_dfs()
 
         # Figure
         # 10 wide, 6 deep
@@ -82,6 +100,36 @@ class schupp_figures:
         self.temp_plot_marker_dict = {29: "v", 30: "o", 31: "^", '29': "v", '30': "o", '31': "^"}
         self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#898989", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#898989", '31': "#0d0d0d"}
 
+
+    def _get_sp_dfs(self):
+        """
+        Return three pd DataFrames.
+        One from the SP datasheet
+        One that contains the post-MED seq counts
+        One that contains the profile counts
+        """
+        # datasheet df
+        sp_ds_df = pd.read_excel(io=self.sp_datasheet_path, skiprows=[0])
+        collection_cols = [lab for lab in list(sp_ds_df) if ("collection" in lab) or ("Unnamed" in lab)]
+        sp_ds_df.drop(columns=collection_cols, inplace=True)
+        sp_ds_df.set_index("sample_name", drop=True, inplace=True)
+
+        # seqs count df
+        seq_count_df = pd.read_csv(self.sp_seq_count_path, sep='\t')
+        self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.sample_uid, seq_count_df.sample_name))
+        self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.sample_uid))
+        seq_count_df.set_index(keys='sample_uid', drop=True, inplace=True)
+        index_of_first_seq = list(seq_count_df).index("A3")
+        seq_count_df = seq_count_df.iloc[:-1, index_of_first_seq:]
+
+        # profile meta and abund df
+
+
+        foo = 'bar'
+
+        return sp_ds_df
+        foo = 'bar'
+
     def plot_fig_1(self):
         """
         The main plotting method for plotting up the figure that has the four species columns with a plot
@@ -94,20 +142,26 @@ class schupp_figures:
                 elif data_type == 'recruit_survival':
                     self._plot_recruit_survival(data_type, i, j, sp)
                 elif data_type == 'recruit_size':
-                    ax = self.axes[i][j]
-                    param_to_plot = "cyl_vol"
-                    working_df = self.fv_fm_size_df[(self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
-                    # Convert to cm3
-                    working_df['cyl_vol'] = working_df['cyl_vol'] / 1000
-                    self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+                    self._plot_recruit_size(data_type, i, j, sp)
                 elif data_type == 'recruit_fv_fm':
-                    ax = self.axes[i][j]
-                    param_to_plot = "fv_fm"
-                    working_df = self.fv_fm_size_df[
-                        (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
-                    self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+                    self._plot_recruit_fv_fm(data_type, i, j, sp)
                     foo = 'bar'
 
+    def _plot_recruit_fv_fm(self, data_type, i, j, sp):
+        ax = self.axes[i][j]
+        param_to_plot = "fv_fm"
+        working_df = self.fv_fm_size_df[
+            (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
+        self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+
+    def _plot_recruit_size(self, data_type, i, j, sp):
+        ax = self.axes[i][j]
+        param_to_plot = "cyl_vol"
+        working_df = self.fv_fm_size_df[
+            (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
+        # Convert to cm3
+        working_df['cyl_vol'] = working_df['cyl_vol'] / 1000
+        self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
 
     def _plot_recruit_survival(self, data_type, i, j, sp):
         # This is slightly more complicated because we need to work with the shipping of the corals from Guam to Germany
