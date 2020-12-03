@@ -37,6 +37,7 @@ import matplotlib.gridspec as gridspec
 from collections import defaultdict
 import numpy as np
 import re
+DEGREE_SIGN = u'\N{DEGREE SIGN}'
 
 
 class schupp_figures:
@@ -52,6 +53,10 @@ class schupp_figures:
             'Acropora digitifera', 'Acropora hyacinthus', 'Pocillopora damicornis', 'Leptastrea purpurea'
         ]
         self.species_short = ['ad', 'ah', 'pd', 'lp']
+        self.species_short_to_full_dict = {
+            'ad':'Acropora digitifera', 'ah':'Acropora hyacinthus',
+            'pd':'Pocillopora damicornis', 'lp':'Leptastrea purpurea'
+        }
         self.data_types = ['adult_survival', 'adult_zooxs', 'recruit_survival', 'recruit_size_fv_fm', 'recruit_zooxs']
 
         # Dataframe
@@ -74,6 +79,8 @@ class schupp_figures:
             for j, data_type in enumerate(self.data_types):
                 # create a plot
                 self.axes[i].append(plt.subplot(self.gs[j, i]))
+        self.temp_plot_marker_dict = {29: "v", 30: "o", 31: "^", '29': "v", '30': "o", '31': "^"}
+        self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#898989", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#898989", '31': "#0d0d0d"}
 
     def plot_fig_1(self):
         """
@@ -83,23 +90,39 @@ class schupp_figures:
         for i, sp in enumerate(self.species_short):
             for j, data_type in enumerate(self.data_types):
                 if data_type == 'adult_survival':
-                    if sp in ['ad', 'ah']:
-                        # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
-                        ax = self.axes[j][i]
-                        # We will need to do an ax.errorbar for each of the temperatures
-                        working_df = self.survival_df[(self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
-                        working_df['survival_percent'] = (working_df['survival'] / 5) * 100
-                        for temp in working_df['temperature'].unique():
-                            ser = working_df[working_df['temperature'] == temp]
-                            # Calc average survival for each time point and the standard error of the mean
-                            means = [ser[ser['time_value'] == time_val]['survival_percent'].mean() for time_val in ser['time_value'].unique()]
-                            sem = [ ser[ser['time_value'] == time_val]['survival_percent'].sem() for time_val in ser['time_value'].unique()]
-                            ax.errorbar(x=ser['time_value'].unique(), y=means, yerr=sem)
-                        foo = 'bar'
-                    else:
-                        pass
+                    self._plot_adult_survival(i, j, sp)
 
-
+    def _plot_adult_survival(self, i, j, sp):
+        if sp in ['ad', 'ah']:
+            # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
+            ax = self.axes[j][i]
+            # We will need to do an ax.errorbar for each of the temperatures
+            working_df = self.survival_df[
+                (self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
+            working_df['survival_percent'] = (working_df['survival'] / 5) * 100
+            for temp in working_df['temperature'].unique():
+                ser = working_df[working_df['temperature'] == temp]
+                # Calc average survival for each time point and the standard error of the mean
+                means = [ser[ser['time_value'] == time_val]['survival_percent'].mean() for time_val in
+                         ser['time_value'].unique()]
+                sem = [ser[ser['time_value'] == time_val]['survival_percent'].sem() for time_val in
+                       ser['time_value'].unique()]
+                ax.errorbar(
+                    x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+                    linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
+                    elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2, label=f'{temp}{DEGREE_SIGN}C'
+                )
+            ax.legend(loc='lower left', fontsize='xx-small')
+            ax.set_xlabel('days', fontsize='xx-small')
+            if sp == 'ad':
+                # only set one per row
+                ax.set_ylabel('survial %', fontsize='xx-small')
+            ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
+            plt.tight_layout()
+            foo = 'bar'
+        else:
+            # Then the data does not exist.
+            pass
 
     def _make_survival_fv_fm_size_dfs(self, fv_fm_size_data, survival_data):
         survival_df = pd.DataFrame(
