@@ -94,14 +94,17 @@ class schupp_figures:
                 elif data_type == 'recruit_survival':
                     self._plot_recruit_survival(data_type, i, j, sp)
                 elif data_type == 'recruit_size':
-                    # We will do two plots at once as hopefully it should be easy to wrange both data sets
-                    # at once.
                     ax = self.axes[i][j]
-                    # We will need to do an ax.errorbar for each of the temperatures
                     param_to_plot = "cyl_vol"
                     working_df = self.fv_fm_size_df[(self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
                     # Convert to cm3
                     working_df['cyl_vol'] = working_df['cyl_vol'] / 1000
+                    self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+                elif data_type == 'recruit_fv_fm':
+                    ax = self.axes[i][j]
+                    param_to_plot = "fv_fm"
+                    working_df = self.fv_fm_size_df[
+                        (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
                     self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
                     foo = 'bar'
 
@@ -237,6 +240,8 @@ class schupp_figures:
             ax.set_ylabel('survial %', fontsize='xx-small')
         elif sp == 'ad' and "size" in data_type:
             ax.set_ylabel('cyl. vol. ml', fontsize='xx-small')
+        elif sp == 'ad' and data_type == "recruit_fv_fm":
+            ax.set_ylabel('Fv/Fm', fontsize='xx-small')
         if data_type == 'adult_survival':
             ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
         plt.tight_layout()
