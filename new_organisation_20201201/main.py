@@ -40,6 +40,9 @@ import re
 import itertools
 import sys
 import random
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
+from matplotlib.colors import ListedColormap
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 
 
@@ -222,24 +225,78 @@ class schupp_figures:
                     # starting at the left of the plot axis and then we can see how it looks once we've worked
                     # with the recruit zooxs as well.
                     # Get the sample_uids that we are dealing with
-                    if sp == 'ad':
-                        sample_uids = [
-                            self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
-                                (self.sp_datasheet_df['age'] == 'adult') &
-                                (self.sp_datasheet_df['host_species'] == 'digitifera')
-                            ].index
-                        ]
-                        foo = 'bar'
+                    ax = self.axes[i][j]
+                    sample_uids = self._get_sample_uid_adult_zooxs(sp)
 
-
-
+                    # Now we can plot up the seqs and profiles.
+                    self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
                 elif data_type == 'recruit_survival':
                     self._plot_recruit_survival(data_type, i, j, sp)
                 elif data_type == 'recruit_size':
                     self._plot_recruit_size(data_type, i, j, sp)
                 elif data_type == 'recruit_fv_fm':
                     self._plot_recruit_fv_fm(data_type, i, j, sp)
-                    foo = 'bar'
+
+    def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
+        x_index_for_plot = 0
+        patches_list = []
+        colour_list = []
+        for sample_uid in sample_uids:
+            bottom = 0
+            non_zero_seq_abundances = self.sp_seq_rel_abund_df.loc[sample_uid][
+                self.sp_seq_rel_abund_df.loc[sample_uid] > 0]
+            for seq_uid, rel_abund in non_zero_seq_abundances.iteritems():
+                patches_list.append(Rectangle(
+                    (x_index_for_plot - 0.5, bottom),
+                    1,
+                    rel_abund, color=self.seq_color_dict[seq_uid]))
+                bottom += rel_abund
+                colour_list.append(self.seq_color_dict[seq_uid])
+            x_index_for_plot += 1
+        listed_colour_map = ListedColormap(colour_list)
+        patches_collection = PatchCollection(patches_list, cmap=listed_colour_map)
+        patches_collection.set_array(np.arange(len(patches_list)))
+        ax.add_collection(patches_collection)
+        ax.autoscale_view()
+        ax.figure.canvas.draw()
+
+    def _get_sample_uid_adult_zooxs(self, sp):
+        if sp == 'ad':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'digitifera')
+                    ].index
+            ]
+        elif sp == 'ah':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'surculosa')
+                    ].index
+            ]
+        elif sp == 'pd':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'damicornis')
+                    ].index
+            ]
+        elif sp == 'lp':
+            # TODO there are multiple purpurea adult samples from different location
+            # I'm not sure which onces I should be working with
+            # For the time being I'll proceed with thos samples that were part of the same sequencing
+            # plate as the other adults
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'purpurea') &
+                    (self.sp_datasheet_df['sample_name'].str.contains("P4"))
+                    ].index
+            ]
+        else:
+            raise RuntimeError(f'unexpected species {sp}')
+        return sample_uids
 
     def _plot_recruit_fv_fm(self, data_type, i, j, sp):
         ax = self.axes[i][j]
