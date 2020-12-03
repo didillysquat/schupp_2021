@@ -85,7 +85,7 @@ class schupp_figures:
         self.sp_sample_name_to_sample_uid_dict = None
         self.sp_profile_uid_to_profile_name_dict = None
         self.sp_profile_name_to_profile_uid_dict = None
-        self.sp_datasheet_df, self.sp_seqs_df, self.sp_profile_df = self._get_sp_dfs()
+        self.sp_datasheet_df, self.sp_seqs_df, self.sp_profile_meta_df, self.sp_profile_abund_df = self._get_sp_dfs()
 
         # Figure
         # 10 wide, 6 deep
@@ -108,27 +108,57 @@ class schupp_figures:
         One that contains the post-MED seq counts
         One that contains the profile counts
         """
-        # datasheet df
-        sp_ds_df = pd.read_excel(io=self.sp_datasheet_path, skiprows=[0])
-        collection_cols = [lab for lab in list(sp_ds_df) if ("collection" in lab) or ("Unnamed" in lab)]
-        sp_ds_df.drop(columns=collection_cols, inplace=True)
-        sp_ds_df.set_index("sample_name", drop=True, inplace=True)
+        sp_ds_df = self._make_sp_datasheet_df()
 
-        # seqs count df
+        seq_count_df = self._make_sp_seq_abund_df()
+
+        # profile meta and abund df
+        profile_abund_df, profile_meta_df = self._make_profile_dfs()
+
+        return sp_ds_df, seq_count_df, profile_meta_df, profile_abund_df
+
+    def _make_profile_dfs(self):
+        profile_meta_df = self._make_sp_profile_meta_df()
+        profile_abund_df = self._make_sp_profile_abund_df()
+        return profile_abund_df, profile_meta_df
+
+    def _make_sp_profile_abund_df(self):
+        profile_abund_df = pd.read_csv(self.sp_profile_abund_path, sep='\t')
+        profile_abund_df.set_index("sample_uid", drop=True, inplace=True)
+        return profile_abund_df
+
+    def _make_sp_profile_meta_df(self):
+        profile_meta_df = pd.read_csv(self.sp_profile_meta_path, sep='\t')
+        self.sp_profile_name_to_profile_uid_dict = dict(zip(
+            profile_meta_df["ITS2 type profile UID"],
+            profile_meta_df['ITS2 type profile']
+        ))
+        self.sp_profile_uid_to_profile_name_dict = dict(zip(
+            profile_meta_df['ITS2 type profile'],
+            profile_meta_df["ITS2 type profile UID"]
+        ))
+        profile_meta_df.rename(
+            columns={"ITS2 type profile": "profile_name", "ITS2 type profile UID": "profile_uid"},
+            inplace=True
+        )
+        profile_meta_df.set_index("profile_uid", inplace=True, drop=True)
+        return profile_meta_df
+
+    def _make_sp_seq_abund_df(self):
         seq_count_df = pd.read_csv(self.sp_seq_count_path, sep='\t')
         self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.sample_uid, seq_count_df.sample_name))
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.sample_uid))
         seq_count_df.set_index(keys='sample_uid', drop=True, inplace=True)
         index_of_first_seq = list(seq_count_df).index("A3")
         seq_count_df = seq_count_df.iloc[:-1, index_of_first_seq:]
+        return seq_count_df
 
-        # profile meta and abund df
-
-
-        foo = 'bar'
-
+    def _make_sp_datasheet_df(self):
+        sp_ds_df = pd.read_excel(io=self.sp_datasheet_path, skiprows=[0])
+        collection_cols = [lab for lab in list(sp_ds_df) if ("collection" in lab) or ("Unnamed" in lab)]
+        sp_ds_df.drop(columns=collection_cols, inplace=True)
+        sp_ds_df.set_index("sample_name", drop=True, inplace=True)
         return sp_ds_df
-        foo = 'bar'
 
     def plot_fig_1(self):
         """
