@@ -114,10 +114,28 @@ class schupp_figures:
         self.gs = gridspec.GridSpec(6, 4)
         self.axes = [[] for sp in self.species_short]
         # We will have the various axes as coordinates in columns and rows
+        # For all of the data types except recruit zooxs, there will be one axis per speceis, data type combination
+        # For the recruit_zooxs this gets more complicated as we esentially have a matrix of time and temperature
+        # To represent this, for the recruit zooxs we will have a matrix of axes
+        # We will house these axes array (one for each species) in a dict that is key of the speices short
+        # and value of a 2d list
+        self.recruit_zooxs_axes_dict = {}
         for i, sp in enumerate(self.species_short):
             for j, data_type in enumerate(self.data_types):
                 # create a plot
-                self.axes[i].append(plt.subplot(self.gs[j, i]))
+                if data_type == 'recruit_zooxs':
+                    # We want to split up the recruit_zooxs gs to make a matrix of plots
+                    inner_grid_spec = self.gs[j, i].subgridspec(3, 5)
+                    outer_temp_list = []
+                    for k in range(3):
+                        inner_temp_list = []
+                        for l in range(5):
+                            inner_temp_list.append(plt.subplot(inner_grid_spec[k, l]))
+                        outer_temp_list.append(inner_temp_list)
+                    self.recruit_zooxs_axes_dict[sp] = outer_temp_list
+                else:
+                    self.axes[i].append(plt.subplot(self.gs[j, i]))
+
         self.temp_plot_marker_dict = {29: "v", 30: "o", 31: "^", '29': "v", '30': "o", '31': "^"}
         self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#898989", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#898989", '31': "#0d0d0d"}
 
@@ -236,6 +254,30 @@ class schupp_figures:
                     self._plot_recruit_size(data_type, i, j, sp)
                 elif data_type == 'recruit_fv_fm':
                     self._plot_recruit_fv_fm(data_type, i, j, sp)
+                elif data_type == 'recruit_zooxs':
+                    ax_array = self.recruit_zooxs_axes_dict[sp]
+                    sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
+                    # convert the ages to numeric by getting rid of the 'month' or 'months'
+                    working_abund_df = self.sp_seq_rel_abund_df.loc[sample_uids]
+                    working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
+                    working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
+                    # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
+                    # We should be able to use the rectangle code that we made for the adults
+                    # To input into that code we simply need a list of sample UIDs and an axis
+                    for k, temp in enumerate([29, 30, 31]):
+                        for l, age in enumerate([1, 3, 6, 9, 12]):
+                            ax = ax_array[k][l]
+                            sample_uids = [
+                                self.sp_sample_name_to_sample_uid_dict[sample_name] for
+                                sample_name in
+                                working_datasheet_df[
+                                    (working_datasheet_df['temp'] == temp) &
+                                    (working_datasheet_df['age'] == age)
+                                ].index
+                            ]
+                            if sample_uids:
+                                # Not all species have the zooxs data for the complete time/temp matrix
+                                self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
 
     def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
         x_index_for_plot = 0
@@ -258,7 +300,7 @@ class schupp_figures:
         patches_collection.set_array(np.arange(len(patches_list)))
         ax.add_collection(patches_collection)
         ax.autoscale_view()
-        ax.figure.canvas.draw()
+        self.fig.canvas.draw()
 
     def _get_sample_uid_adult_zooxs(self, sp):
         if sp == 'ad':
@@ -298,12 +340,63 @@ class schupp_figures:
             raise RuntimeError(f'unexpected species {sp}')
         return sample_uids
 
+    def _get_sample_uid_recruit_zooxs(self, sp):
+        if sp == 'ad':
+            # 1, 3, 6, 9, 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                    (self.sp_datasheet_df['host_species'] == 'digitifera') &
+                    (self.sp_datasheet_df['age'].str.contains("month")) &
+                    (~self.sp_datasheet_df['age'].str.contains("through")) &
+                    (~self.sp_datasheet_df['age'].str.contains("delayed"))
+                    ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'ah':
+            # 3, 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'surculosa') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'pd':
+            # 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'damicornis') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'lp':
+            # 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'purpurea') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        else:
+            raise RuntimeError(f'unexpected species {sp}')
+        return sample_uids, sample_names_index
+
     def _plot_recruit_fv_fm(self, data_type, i, j, sp):
         ax = self.axes[i][j]
         param_to_plot = "fv_fm"
         working_df = self.fv_fm_size_df[
             (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
-        self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+        if working_df.index.to_list():
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
 
     def _plot_recruit_size(self, data_type, i, j, sp):
         ax = self.axes[i][j]
@@ -312,7 +405,8 @@ class schupp_figures:
             (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
         # Convert to cm3
         working_df['cyl_vol'] = working_df['cyl_vol'] / 1000
-        self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+        if working_df.index.to_list():
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
 
     def _plot_recruit_survival(self, data_type, i, j, sp):
         # This is slightly more complicated because we need to work with the shipping of the corals from Guam to Germany
@@ -359,7 +453,8 @@ class schupp_figures:
         working_df = working_df[working_df[param_to_plot].notnull()]
         # Now we can finally plot
         # Similar to the adults we want to do an ax.errorbar for each of the temperatures
-        self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+        if working_df.index.to_list():
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
 
     def _calculate_survival_percent_recruit_survival(self, time_first_after_survival_dict, time_first_after_val,
                                                      time_last_before_dict, time_zero_dict, working_df):
@@ -461,7 +556,8 @@ class schupp_figures:
                 (self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
             working_df['survival_percent'] = (working_df['survival'] / 5) * 100
             working_df = working_df[working_df[param_to_plot].notnull()]
-            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+            if working_df.index.to_list():
+                self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
         else:
             # Then the data does not exist.
             pass
