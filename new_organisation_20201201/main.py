@@ -43,6 +43,7 @@ import random
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import ListedColormap
+from datetime import datetime
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 
 
@@ -137,7 +138,7 @@ class schupp_figures:
                     self.axes[i].append(plt.subplot(self.gs[j, i]))
 
         self.temp_plot_marker_dict = {29: "v", 30: "o", 31: "^", '29': "v", '30': "o", '31': "^"}
-        self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#898989", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#898989", '31': "#0d0d0d"}
+        self.temp_plot_colour_dict = {29: "#a6a6a6", 30: "#696969", 31: "#0d0d0d", '29': "#a6a6a6", '30': "#696969", '31': "#0d0d0d"}
 
         # Colour generators for seq and profile plotting
         self.grey_iterator = itertools.cycle(['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F'])
@@ -247,6 +248,13 @@ class schupp_figures:
                     self._plot_recruit_fv_fm(data_type, i, j, sp)
                 elif data_type == 'recruit_zooxs':
                     self._plot_recruit_zooxs(sp)
+
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"phys_and_zooxs_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                    dpi=1200)
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"phys_and_zooxs_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                    dpi=1200)
         foo = 'bar'
 
     def _plot_adult_zooxs(self, i, j, sp):
@@ -261,15 +269,26 @@ class schupp_figures:
         # convert the ages to numeric by getting rid of the 'month' or 'months'
         working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
         working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
-        self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df)
+        self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df, sp)
 
-    def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df):
+    def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df, sp):
         # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
         # We should be able to use the rectangle code that we made for the adults
         # To input into that code we simply need a list of sample UIDs and an axis
         for k, temp in enumerate([29, 30, 31]):
             for l, age in enumerate([1, 3, 6, 9, 12]):
                 ax = ax_array[k][l]
+                # If left hand plot, set temp as y axis label
+                # If bottom plot, set time as x axis label
+                if l == 0 and k == 1 and sp == 'ad':
+                    ax.set_ylabel(f'Temp.\n{temp}', fontsize='small')
+                elif l == 0 and sp == 'ad':
+                    ax.set_ylabel(f'{temp}', fontsize='small')
+                if k == 2 and l == 2:
+                    # We will try to put month in the middle
+                    ax.set_xlabel(f'{age}\nmonths')
+                elif k==2:
+                    ax.set_xlabel(f'{age}')
                 sample_uids = [
                     self.sp_sample_name_to_sample_uid_dict[sample_name] for
                     sample_name in
@@ -279,8 +298,16 @@ class schupp_figures:
                         ].index
                 ]
                 if sample_uids:
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['bottom'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    ax.spines['left'].set_visible(False)
+                    ax.set_yticks([])
+                    ax.set_xticks([])
                     # Not all species have the zooxs data for the complete time/temp matrix
                     self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
+                else:
+                    ax.axis('off')
 
     def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
         x_index_for_plot = 0
@@ -398,18 +425,26 @@ class schupp_figures:
         param_to_plot = "fv_fm"
         working_df = self.fv_fm_size_df[
             (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
+        self._plot_if_working_df(ax, data_type, param_to_plot, sp, working_df)
+
+    def _plot_if_working_df(self, ax, data_type, param_to_plot, sp, working_df, time_first_after_val=None):
         if working_df.index.to_list():
-            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot, time_first_after_val)
+        else:
+            # Turn off the axis but make sure that a title is still provided if this is adult survival
+            ax.axis('off')
+            if data_type == 'adult_survival':
+                ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
+
 
     def _plot_recruit_size(self, data_type, i, j, sp):
         ax = self.axes[i][j]
         param_to_plot = "cyl_vol"
         working_df = self.fv_fm_size_df[
-            (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())]
+            (self.fv_fm_size_df['species'] == sp) & (self.fv_fm_size_df[param_to_plot].notnull())].copy()
         # Convert to cm3
         working_df['cyl_vol'] = working_df['cyl_vol'] / 1000
-        if working_df.index.to_list():
-            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+        self._plot_if_working_df(ax, data_type, param_to_plot, sp, working_df)
 
     def _plot_recruit_survival(self, data_type, i, j, sp):
         # This is slightly more complicated because we need to work with the shipping of the corals from Guam to Germany
@@ -421,7 +456,7 @@ class schupp_figures:
         working_df = self.survival_df[
             (self.survival_df['adult_recruit'] == 'recruit') &
             (self.survival_df['species'] == sp)
-        ]
+        ].copy()
         # The survival percent calculation will depend on the species because there were slightly
         # different time points for each of the species.
         # For the time points measured before moving, the survival will be the value divided by
@@ -457,11 +492,9 @@ class schupp_figures:
         working_df = working_df[working_df[param_to_plot].notnull()]
         # Now we can finally plot
         # Similar to the adults we want to do an ax.errorbar for each of the temperatures
-        if working_df.index.to_list():
-            # NB for the recruit survival points, we don't want there to be a line connecting the before
-            # and after travel points.
-            # TODO we may want to add in a vertical line or something similar to denote the travel time for the samples
-            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot, time_first_after_val)
+        # NB for the recruit survival points, we don't want there to be a line connecting the before
+        # and after travel points.
+        self._plot_if_working_df(ax, data_type, param_to_plot, sp, working_df, time_first_after_val)
 
     def _calculate_survival_percent_recruit_survival(self, time_first_after_survival_dict, time_first_after_val,
                                                      time_last_before_dict, time_zero_dict, working_df):
@@ -542,17 +575,23 @@ class schupp_figures:
             ax.set_xticks([0,5,10,15,20,25])
         elif time_unit == 'months':
             ax.set_xticks([0,3,6,9,12])
-        ax.legend(loc='lower left', fontsize='xx-small')
+        if sp == 'ad' and data_type == 'adult_survival':
+            ax.legend(loc='lower left', fontsize='xx-small')
+            ax.set_ylabel('Adult survial %', fontsize='small')
         ax.set_xlabel(time_unit, fontsize='xx-small')
-        if sp == 'ad' and "survival" in data_type:
+        if sp == 'ad' and data_type == 'recruit_survival':
             # only set one per row
-            ax.set_ylabel('survial %', fontsize='xx-small')
+            ax.set_ylabel('Recruit survial %', fontsize='small')
         elif sp == 'ad' and "size" in data_type:
-            ax.set_ylabel('cyl. vol. ml', fontsize='xx-small')
+            ax.set_ylabel('Size\ncyl. vol. ml', fontsize='small')
         elif sp == 'ad' and data_type == "recruit_fv_fm":
-            ax.set_ylabel('Fv/Fm', fontsize='xx-small')
+            ax.set_ylabel('Fv/Fm', fontsize='small')
         if data_type == 'adult_survival':
             ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
+        if data_type == "recruit_fv_fm":
+            ax.set_ylim(0.54,0.71)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         plt.tight_layout()
 
     def _calc_mean_sem_plot_line(self, ax, param_to_plot, ser, temp):
@@ -561,7 +600,7 @@ class schupp_figures:
         sem = [ser[ser['time_value'] == time_val][param_to_plot].sem() for time_val in
                ser['time_value'].unique()]
         ax.errorbar(
-            x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+            x=ser['time_value'].unique(), y=means, yerr=sem, marker=self.temp_plot_marker_dict[temp],
             linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
             elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
             label=f'{temp}{DEGREE_SIGN}C'
@@ -573,27 +612,24 @@ class schupp_figures:
         sem = [ser[ser['time_value'] == time_val][param_to_plot].sem() for time_val in
                ser['time_value'].unique()]
         ax.errorbar(
-            x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+            x=ser['time_value'].unique(), y=means, yerr=sem, marker=self.temp_plot_marker_dict[temp],
             linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
             elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
             label=None
         )
 
     def _plot_adult_survival(self, i, j, sp, data_type):
-        if sp in ['ad', 'ah']:
-            # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
-            ax = self.axes[i][j]
-            # We will need to do an ax.errorbar for each of the temperatures
-            param_to_plot = "survival_percent"
-            working_df = self.survival_df[
-                (self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)]
-            working_df['survival_percent'] = (working_df['survival'] / 5) * 100
-            working_df = working_df[working_df[param_to_plot].notnull()]
-            if working_df.index.to_list():
-                self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
-        else:
-            # Then the data does not exist.
-            pass
+
+        # Plot the aduult_survival as just that, survival. So start with 100% and then decrease
+        ax = self.axes[i][j]
+        # We will need to do an ax.errorbar for each of the temperatures
+        param_to_plot = "survival_percent"
+        working_df = self.survival_df[
+            (self.survival_df['adult_recruit'] == 'adult') & (self.survival_df['species'] == sp)].copy()
+        working_df['survival_percent'] = (working_df['survival'] / 5) * 100
+        working_df = working_df[working_df[param_to_plot].notnull()]
+        self._plot_if_working_df(ax, data_type, param_to_plot, sp, working_df)
+
 
     def _make_survival_fv_fm_size_dfs(self, fv_fm_size_data, survival_data):
         survival_df = pd.DataFrame(
