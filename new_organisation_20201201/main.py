@@ -104,10 +104,10 @@ class schupp_figures:
         # Reorder the abundance dataframes in order of most abundant sequences/profiles
         sorted_seq_index = self.sp_seq_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
         sorted_profile_index = self.sp_profile_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
-        self.sp_seq_rel_abund_df.reindex(sorted_seq_index, axis=1)
-        self.sp_seq_abs_abund_df.reindex(sorted_seq_index, axis=1)
-        self.sp_profile_rel_abund_df.reindex(sorted_profile_index, axis=1)
-        self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
+        self.sp_seq_rel_abund_df = self.sp_seq_rel_abund_df.reindex(sorted_seq_index, axis=1)
+        self.sp_seq_abs_abund_df = self.sp_seq_abs_abund_df.reindex(sorted_seq_index, axis=1)
+        self.sp_profile_rel_abund_df = self.sp_profile_rel_abund_df.reindex(sorted_profile_index, axis=1)
+        self.sp_profile_abs_abund_df = self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
 
         # Figure
         # 10 wide, 6 deep
@@ -262,6 +262,9 @@ class schupp_figures:
         sample_uids = self._get_sample_uid_adult_zooxs(sp)
         # Now we can plot up the seqs and profiles.
         self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
+        self._rm_all_spines_and_ticks(ax=ax)
+        if sp == 'ad':
+            ax.set_ylabel('Adult Symbio.', fontsize='small')
 
     def _plot_recruit_zooxs(self, sp):
         ax_array = self.recruit_zooxs_axes_dict[sp]
@@ -281,7 +284,7 @@ class schupp_figures:
                 # If left hand plot, set temp as y axis label
                 # If bottom plot, set time as x axis label
                 if l == 0 and k == 1 and sp == 'ad':
-                    ax.set_ylabel(f'Temp.\n{temp}', fontsize='small')
+                    ax.set_ylabel(f'Recruit Symbio.\nTemp.\n{temp}', fontsize='small')
                 elif l == 0 and sp == 'ad':
                     ax.set_ylabel(f'{temp}', fontsize='small')
                 if k == 2 and l == 2:
@@ -298,16 +301,19 @@ class schupp_figures:
                         ].index
                 ]
                 if sample_uids:
-                    ax.spines['top'].set_visible(False)
-                    ax.spines['bottom'].set_visible(False)
-                    ax.spines['right'].set_visible(False)
-                    ax.spines['left'].set_visible(False)
-                    ax.set_yticks([])
-                    ax.set_xticks([])
+                    self._rm_all_spines_and_ticks(ax)
                     # Not all species have the zooxs data for the complete time/temp matrix
                     self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
                 else:
-                    ax.axis('off')
+                    self._rm_all_spines_and_ticks(ax)
+
+    def _rm_all_spines_and_ticks(self, ax):
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.set_yticks([])
+        ax.set_xticks([])
 
     def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
         x_index_for_plot = 0
