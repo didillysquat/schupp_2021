@@ -238,16 +238,7 @@ class schupp_figures:
                 if data_type == 'adult_survival':
                     self._plot_adult_survival(i, j, sp, data_type)
                 if data_type == 'adult_zooxs':
-                    # There are only about 5 colonies for adults.
-                    # For the time being it probably makes sense to plot up the 'standard' seq and profile plots just
-                    # starting at the left of the plot axis and then we can see how it looks once we've worked
-                    # with the recruit zooxs as well.
-                    # Get the sample_uids that we are dealing with
-                    ax = self.axes[i][j]
-                    sample_uids = self._get_sample_uid_adult_zooxs(sp)
-
-                    # Now we can plot up the seqs and profiles.
-                    self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
+                    self._plot_adult_zooxs(i, j, sp)
                 elif data_type == 'recruit_survival':
                     self._plot_recruit_survival(data_type, i, j, sp)
                 elif data_type == 'recruit_size':
@@ -255,29 +246,41 @@ class schupp_figures:
                 elif data_type == 'recruit_fv_fm':
                     self._plot_recruit_fv_fm(data_type, i, j, sp)
                 elif data_type == 'recruit_zooxs':
-                    ax_array = self.recruit_zooxs_axes_dict[sp]
-                    sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
-                    # convert the ages to numeric by getting rid of the 'month' or 'months'
-                    working_abund_df = self.sp_seq_rel_abund_df.loc[sample_uids]
-                    working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
-                    working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
-                    # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
-                    # We should be able to use the rectangle code that we made for the adults
-                    # To input into that code we simply need a list of sample UIDs and an axis
-                    for k, temp in enumerate([29, 30, 31]):
-                        for l, age in enumerate([1, 3, 6, 9, 12]):
-                            ax = ax_array[k][l]
-                            sample_uids = [
-                                self.sp_sample_name_to_sample_uid_dict[sample_name] for
-                                sample_name in
-                                working_datasheet_df[
-                                    (working_datasheet_df['temp'] == temp) &
-                                    (working_datasheet_df['age'] == age)
-                                ].index
-                            ]
-                            if sample_uids:
-                                # Not all species have the zooxs data for the complete time/temp matrix
-                                self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
+                    self._plot_recruit_zooxs(sp)
+        foo = 'bar'
+
+    def _plot_adult_zooxs(self, i, j, sp):
+        ax = self.axes[i][j]
+        sample_uids = self._get_sample_uid_adult_zooxs(sp)
+        # Now we can plot up the seqs and profiles.
+        self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
+
+    def _plot_recruit_zooxs(self, sp):
+        ax_array = self.recruit_zooxs_axes_dict[sp]
+        sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
+        # convert the ages to numeric by getting rid of the 'month' or 'months'
+        working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
+        working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
+        self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df)
+
+    def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df):
+        # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
+        # We should be able to use the rectangle code that we made for the adults
+        # To input into that code we simply need a list of sample UIDs and an axis
+        for k, temp in enumerate([29, 30, 31]):
+            for l, age in enumerate([1, 3, 6, 9, 12]):
+                ax = ax_array[k][l]
+                sample_uids = [
+                    self.sp_sample_name_to_sample_uid_dict[sample_name] for
+                    sample_name in
+                    working_datasheet_df[
+                        (working_datasheet_df['temp'] == temp) &
+                        (working_datasheet_df['age'] == age)
+                        ].index
+                ]
+                if sample_uids:
+                    # Not all species have the zooxs data for the complete time/temp matrix
+                    self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
 
     def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
         x_index_for_plot = 0
@@ -332,9 +335,9 @@ class schupp_figures:
             sample_uids = [
                 self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
                     (self.sp_datasheet_df['age'] == 'adult') &
-                    (self.sp_datasheet_df['host_species'] == 'purpurea') &
-                    (self.sp_datasheet_df['sample_name'].str.contains("P4"))
-                    ].index
+                    (self.sp_datasheet_df['host_species'] == 'purpurea')
+                    ].index if
+                "P4" in sample_name
             ]
         else:
             raise RuntimeError(f'unexpected species {sp}')
