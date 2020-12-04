@@ -425,36 +425,40 @@ class schupp_figures:
         # the starting value * 100
         # For ad, ah and lp any time value < 4 is a before shipment point and any => 4 is after.
         # For pd <3 is before and >= 3 is after
-        if sp in ['ad', 'ah', 'lp']:
-            # first get the starting survivals and plug these into a dict
-            # There will be one per tank
-            # Pull out the time 0s into a series
-            # The for each row get a tank
-            # Then make these k, v pairs in dict
-            time_zero_dict = self._make_time_zero_df_recruit_survival(working_df)
 
-            # First create a dict that holds the survial percentages for the last measurement before
-            # the move
-            time_first_after_val, time_last_before_dict = self._make_time_last_before_dict_recruit_survival(
-                sp, time_zero_dict, working_df)
+        # first get the starting survivals and plug these into a dict
+        # There will be one per tank
+        # Pull out the time 0s into a series
+        # The for each row get a tank
+        # Then make these k, v pairs in dict
+        time_zero_dict = self._make_time_zero_df_recruit_survival(working_df)
 
-            # Secondly, we want a dict that given a tank we will be able to get the
-            # time_first_after_survival. I.e. the first survival point after the move
-            time_first_after_survival_dict = self._make_time_first_after_survival_dict(time_first_after_val,
-                                                                                       working_df)
+        # First create a dict that holds the survial percentages for the last measurement before
+        # the move
+        time_first_after_val, time_last_before_dict = self._make_time_last_before_dict_recruit_survival(
+            sp, time_zero_dict, working_df)
 
-            # Now that we have the time_last_before_dict we will be able to work out the survival_percentage
-            # for the samples after the move
+        # Secondly, we want a dict that given a tank we will be able to get the
+        # time_first_after_survival. I.e. the first survival point after the move
+        time_first_after_survival_dict = self._make_time_first_after_survival_dict(time_first_after_val,
+                                                                                   working_df)
 
-            # Finally calculate the survival percentages for all samples
-            self._calculate_survival_percent_recruit_survival(time_first_after_survival_dict,
-                                                              time_first_after_val, time_last_before_dict,
-                                                              time_zero_dict, working_df)
+        # Now that we have the time_last_before_dict we will be able to work out the survival_percentage
+        # for the samples after the move
+
+        # Finally calculate the survival percentages for all samples
+        self._calculate_survival_percent_recruit_survival(time_first_after_survival_dict,
+                                                          time_first_after_val, time_last_before_dict,
+                                                          time_zero_dict, working_df)
+
         working_df = working_df[working_df[param_to_plot].notnull()]
         # Now we can finally plot
         # Similar to the adults we want to do an ax.errorbar for each of the temperatures
         if working_df.index.to_list():
-            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot)
+            # NB for the recruit survival points, we don't want there to be a line connecting the before
+            # and after travel points.
+            # TODO we may want to add in a vertical line or something similar to denote the travel time for the samples
+            self._plot_a_set_of_line_data(ax, data_type, sp, working_df, param_to_plot, time_first_after_val)
 
     def _calculate_survival_percent_recruit_survival(self, time_first_after_survival_dict, time_first_after_val,
                                                      time_last_before_dict, time_zero_dict, working_df):
@@ -472,9 +476,8 @@ class schupp_figures:
                 # The decrease in survial for current time point from the last time point before move
                 survival_decrease_percent_after = ((time_first_after_survival - working_df.at[
                     ind, 'survival']) / time_first_after_survival) * 100
-                # Finally, the survival percentage that we want to store is the
-                # survival_decrease_percent_after subtracted from the time_last_before_survival
-                survival_percent.append(time_last_before_survival - survival_decrease_percent_after)
+                # Finally, the survival percentage is a little complicated. Hard to explain. Just think about it.
+                survival_percent.append(time_last_before_survival - (time_last_before_survival*(survival_decrease_percent_after/100)))
         working_df['survival_percent'] = survival_percent
 
     def _make_time_first_after_survival_dict(self, time_first_after_val, working_df):
@@ -512,20 +515,23 @@ class schupp_figures:
             time_zero_dict[tank] = time_zero_df.at[ind, 'survival']
         return time_zero_dict
 
-    def _plot_a_set_of_line_data(self, ax, data_type, sp, working_df, param_to_plot):
+    def _plot_a_set_of_line_data(
+            self, ax, data_type, sp, working_df, param_to_plot, time_first_after_val=None
+    ):
         for temp in working_df['temperature'].unique():
-            ser = working_df[working_df['temperature'] == temp]
-            # Calc average survival for each time point and the standard error of the mean
-            means = [ser[ser['time_value'] == time_val][param_to_plot].mean() for time_val in
-                     ser['time_value'].unique()]
-            sem = [ser[ser['time_value'] == time_val][param_to_plot].sem() for time_val in
-                   ser['time_value'].unique()]
-            ax.errorbar(
-                x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
-                linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
-                elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
-                label=f'{temp}{DEGREE_SIGN}C'
-            )
+            if data_type == 'recruit_survival':
+                # Plot the points in two seperate calls, one for before shipping and one for after so that
+                # there is a break in the line between the points
+                ser = working_df[(working_df['temperature'] == temp) & (working_df['time_value'] < time_first_after_val)]
+                # Calc average survival for each time point and the standard error of the mean
+                self._calc_mean_sem_plot_line(ax, param_to_plot, ser, temp)
+                ser = working_df[(working_df['temperature'] == temp) & (working_df['time_value'] >= time_first_after_val)]
+                # Calc average survival for each time point and the standard error of the mean
+                self._calc_mean_sem_plot_line_no_label(ax, param_to_plot, ser, temp)
+            else:
+                ser = working_df[working_df['temperature'] == temp]
+                # Calc average survival for each time point and the standard error of the mean
+                self._calc_mean_sem_plot_line(ax, param_to_plot, ser, temp)
         if "survival" in data_type:
             ax.set_ylim(-10,110)
         time_unit = working_df['time_unit'].unique()[0]
@@ -545,6 +551,30 @@ class schupp_figures:
         if data_type == 'adult_survival':
             ax.set_title(self.species_short_to_full_dict[sp], fontsize='small')
         plt.tight_layout()
+
+    def _calc_mean_sem_plot_line(self, ax, param_to_plot, ser, temp):
+        means = [ser[ser['time_value'] == time_val][param_to_plot].mean() for time_val in
+                 ser['time_value'].unique()]
+        sem = [ser[ser['time_value'] == time_val][param_to_plot].sem() for time_val in
+               ser['time_value'].unique()]
+        ax.errorbar(
+            x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+            linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
+            elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
+            label=f'{temp}{DEGREE_SIGN}C'
+        )
+
+    def _calc_mean_sem_plot_line_no_label(self, ax, param_to_plot, ser, temp):
+        means = [ser[ser['time_value'] == time_val][param_to_plot].mean() for time_val in
+                 ser['time_value'].unique()]
+        sem = [ser[ser['time_value'] == time_val][param_to_plot].sem() for time_val in
+               ser['time_value'].unique()]
+        ax.errorbar(
+            x=ser['time_value'].unique(), y=means, yerr=sem, marker='o',
+            linestyle='--', linewidth=1, ecolor=self.temp_plot_colour_dict[temp],
+            elinewidth=1, color=self.temp_plot_colour_dict[temp], markersize=2,
+            label=None
+        )
 
     def _plot_adult_survival(self, i, j, sp, data_type):
         if sp in ['ad', 'ah']:
