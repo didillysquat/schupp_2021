@@ -144,11 +144,11 @@ class schupp_figures:
         self.grey_iterator = itertools.cycle(['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F'])
         self.colour_hash_iterator = iter(self._get_colour_list())
         self.pre_def_seq_colour_dict = self._get_pre_def_colour_dict()
-        self.colour_palette_pas_gen = ('#%02x%02x%02x' % rgb_tup for rgb_tup in
-                                  self._create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=5000, num_cols=8,
-                                                           time_out_iterations=10000))
+        # self.colour_palette_pas_gen = ('#%02x%02x%02x' % rgb_tup for rgb_tup in
+        #                           self._create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=5000, num_cols=8,
+        #                                                    time_out_iterations=10000))
         self.seq_color_dict = self._make_seq_colour_dict()
-        self.prof_color_dict = self._make_profile_color_dict()
+        # self.prof_color_dict = self._make_profile_color_dict()
 
     def _make_profile_color_dict(self):
         prof_color_dict = {}
@@ -723,7 +723,13 @@ class schupp_figures:
             else:
                 fv_fm_size_dd[ident]['time'] = xl_df.at[ind, 'time']
         else:
-            fv_fm_size_dd[ident][param] = np.nan
+            # Check to see if param value already exists
+            if param in fv_fm_size_dd[ident].keys():
+                # Already an entry present
+                pass
+            else:
+                # No entry present
+                fv_fm_size_dd[ident][param] = np.nan
             if 'time' in fv_fm_size_dd[ident].keys():
                 assert (xl_df.at[ind, 'time'] == fv_fm_size_dd[ident]['time'])
             else:
