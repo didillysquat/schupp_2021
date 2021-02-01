@@ -232,6 +232,8 @@ class SchuppFigures:
         seq_count_df = pd.read_csv(self.sp_seq_count_path, sep='\t')
         seq_count_df = seq_count_df.iloc[:-1, :]
         seq_count_df.sample_uid = seq_count_df.sample_uid.astype(int)
+        self.sample_uid_to_post_med_absolute = dict(zip(seq_count_df.sample_uid, seq_count_df.post_med_absolute.astype(int)))
+        self.sample_uid_to_post_med_unique = dict(zip(seq_count_df.sample_uid, seq_count_df.post_med_unique.astype(int)))
         self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.sample_uid, seq_count_df.sample_name))
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.sample_uid))
         seq_count_df.set_index(keys='sample_uid', drop=True, inplace=True)
@@ -668,6 +670,7 @@ class HierarchicalPlot(SchuppFigures):
         for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
             for j, plot_type in enumerate(['hierarchical', 'seq_prof', 'cluster']):
                 self.axes.append(plt.subplot(self.gs[((i * 3) + j):((i * 3) + j) + 1,:]))
+
     def plot(self):
         # Get the list of samples that need plotting
         # self.sp_between_smp_dist_path_c
@@ -681,7 +684,11 @@ class HierarchicalPlot(SchuppFigures):
         # The sample names and sample uids that are used in the studies are held in these two objecsts
         # self.sp_sample_names_of_study, self.sp_sample_uids_of_study
 
-        
+        # TODO there are a number of samples that appear to be low quality and I want to potentially filter
+        # these out using either the post_med_absolute (maybe <200) and or the post_med_unique values
+        # As such I quickly want to visualise these values in the same order as the hierarchical clustering
+        # TO do this I will create dictionaries of these values.
+        # self.sample_uid_to_post_med_absolute and self.sample_uid_to_post_med_unique
 
         self.sph_d_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
         d_sample_uids_in_dist = list(self.sph_d_no_plot.dist_df)
@@ -698,10 +705,33 @@ class HierarchicalPlot(SchuppFigures):
             seq_count_table_path=self.sp_seq_count_path,
             profile_count_table_path=self.sp_profile_abund_and_meta_path,
             plot_type='seq_and_profile', orientation='h', legend=False, relative_abundance=True,
-            sample_uids_included=dendrogram_sample_uid_order, bar_ax=self.axes[1], limit_genera=['D']
+            sample_uids_included=dendrogram_sample_uid_order, bar_ax=self.axes[1], limit_genera=['D'],
+            seq_profile_scalar=(1.0, 0.3)
         )
         spb.plot()
+        self.axes[1].set_xticks([])
+        self.axes[1].set_yticks([])
+        species_vals = []
+        for sample_name in [self.sp_sample_uid_to_sample_name_dict[_] for _ in dendrogram_sample_uid_order]:
+            host_species = self.sp_datasheet_df.at[sample_name, 'host_species']
+            if host_species == 'digitifera':
+                species_vals.append(0)
+            elif host_species == 'surculosa':
+                species_vals.append(0.25)
+            elif host_species == 'purpurea':
+                species_vals.append(0.5)
+            elif host_species == 'damicornis':
+                species_vals.append(1)
+        self.axes[2].imshow(np.array(species_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
 
+        # post_med_absolute_values = [self.sample_uid_to_post_med_absolute[_] for _ in dendrogram_sample_uid_order]
+        # post_med_unique_values = [self.sample_uid_to_post_med_unique[_] for _ in dendrogram_sample_uid_order]
+        # self.axes[2].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+        # self.axes[3].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+        # ex_absolute = [1000 if _ >= 200 else 0 for _ in post_med_absolute_values]
+        # ex_unique = [1000 if _ >= 10 else 0 for _ in post_med_unique_values]
+        # self.axes[4].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+        # self.axes[5].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
         foo = 'bar'
 
 
