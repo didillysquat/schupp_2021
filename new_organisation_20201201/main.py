@@ -65,6 +65,10 @@ class SchuppFigures:
             'post_med_seqs',
             '125_20201018_DBV_20201020T020625.seqs.absolute.abund_and_meta.txt'
         )
+        self.sp_profile_abund_and_meta_path = os.path.join(
+            self.sp_data_path, 'its2_type_profiles',
+            '125_20201018_DBV_20201020T020625.profiles.absolute.abund_and_meta.txt'
+        )
         self.sp_profile_abund_path = os.path.join(
             self.sp_data_path, 'its2_type_profiles',
             '125_20201018_DBV_20201020T020625.profiles.absolute.abund_only.txt'
@@ -677,6 +681,8 @@ class HierarchicalPlot(SchuppFigures):
         # The sample names and sample uids that are used in the studies are held in these two objecsts
         # self.sp_sample_names_of_study, self.sp_sample_uids_of_study
 
+        
+
         self.sph_d_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
         d_sample_uids_in_dist = list(self.sph_d_no_plot.dist_df)
         # we want to be working with the following intersect
@@ -684,7 +690,18 @@ class HierarchicalPlot(SchuppFigures):
         d_sample_names_to_plot = [self.sp_sample_uid_to_sample_name_dict[_] for _ in d_sample_uids_to_plot]
         self.sph_d_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, ax=self.axes[0], sample_uids_included=d_sample_uids_to_plot)
         self.sph_d_plot.plot()
+        # Thin out the lines
         self.axes[0].collections[0].set_linewidth(0.5)
+        dendrogram_sample_uid_order = self.sph_d_plot.dendrogram['ivl']
+        # Now plot up the sequences and profiles
+        spb = SPBars(
+            seq_count_table_path=self.sp_seq_count_path,
+            profile_count_table_path=self.sp_profile_abund_and_meta_path,
+            plot_type='seq_and_profile', orientation='h', legend=False, relative_abundance=True,
+            sample_uids_included=dendrogram_sample_uid_order, bar_ax=self.axes[1], limit_genera=['D']
+        )
+        spb.plot()
+
         foo = 'bar'
 
 
