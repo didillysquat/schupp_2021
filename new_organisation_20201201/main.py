@@ -73,6 +73,16 @@ class SchuppFigures:
             self.sp_data_path, 'its2_type_profiles',
             '125_20201018_DBV_20201020T020625.profiles.meta_only.txt'
         )
+        self.sp_between_smp_dist_path_c = os.path.join(
+            self.sp_data_path,
+            'between_sample_distances', 'C',
+            '20201020T020625_braycurtis_sample_distances_C_sqrt.dist'
+        )
+        self.sp_between_smp_dist_path_d = os.path.join(
+            self.sp_data_path,
+            'between_sample_distances', 'D',
+            '20201020T020625_braycurtis_sample_distances_D_sqrt.dist'
+        )
 
         # Datatypes and species
         self.species_full = [
@@ -107,6 +117,12 @@ class SchuppFigures:
             self.sp_profile_abs_abund_df.sum(axis=1), axis=0
         )
 
+        # Get a useful list of the SymPortal sample names and sample UIDs that are used
+        # in the study.
+        # We use this because there are samples in the SymPortal submission that are not used in this study
+        # So it is good to know which samples we need to be working with
+        self.sp_sample_names_of_study, self.sp_sample_uids_of_study = self._get_name_and_uid_of_samples_to_plot()
+
         # Reorder the abundance dataframes in order of most abundant sequences/profiles
         sorted_seq_index = self.sp_seq_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
         sorted_profile_index = self.sp_profile_rel_abund_df.sum(axis=0).sort_values(ascending=False).index
@@ -114,6 +130,57 @@ class SchuppFigures:
         self.sp_seq_abs_abund_df = self.sp_seq_abs_abund_df.reindex(sorted_seq_index, axis=1)
         self.sp_profile_rel_abund_df = self.sp_profile_rel_abund_df.reindex(sorted_profile_index, axis=1)
         self.sp_profile_abs_abund_df = self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
+
+    def _get_name_and_uid_of_samples_to_plot(self):
+        sample_names_list = []
+        # recruit ad
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['host_species'] == 'digitifera') &
+                                      (self.sp_datasheet_df['age'].str.contains("month")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("through")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("delayed"))
+                                      ].index.values)
+        # recruit ah
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['host_species'] == 'surculosa') &
+                                      (self.sp_datasheet_df['age'].str.contains("month")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("adult"))
+                                      ].index.values)
+        # recruit pd
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['host_species'] == 'damicornis') &
+                                      (self.sp_datasheet_df['age'].str.contains("month")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("adult"))
+                                      ].index.values)
+        # recruit lp
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['host_species'] == 'purpurea') &
+                                      (self.sp_datasheet_df['age'].str.contains("month")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("adult"))
+                                      ].index.values)
+        # adult ad
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['age'] == 'adult') &
+                                      (self.sp_datasheet_df['host_species'] == 'digitifera')
+                                      ].index.values)
+        # adult ah
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['age'] == 'adult') &
+                                      (self.sp_datasheet_df['host_species'] == 'surculosa')
+                                      ].index.values)
+        # adult pd
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['age'] == 'adult') &
+                                      (self.sp_datasheet_df['host_species'] == 'damicornis')
+                                      ].index.values)
+        # adult lp
+        sample_names_list += [_ for _ in self.sp_datasheet_df[
+            (self.sp_datasheet_df['age'] == 'adult') &
+            (self.sp_datasheet_df['host_species'] == 'purpurea')
+            ].index.values if
+                              "P4" in _]
+
+        return sample_names_list, [self.sp_sample_name_to_sample_uid_dict[_] for _ in sample_names_list]
 
     def _get_sp_dfs(self):
         """
@@ -142,11 +209,11 @@ class SchuppFigures:
 
     def _make_sp_profile_meta_df(self):
         profile_meta_df = pd.read_csv(self.sp_profile_meta_path, sep='\t')
-        self.sp_profile_name_to_profile_uid_dict = dict(zip(
+        self.sp_profile_uid_to_profile_name_dict = dict(zip(
             profile_meta_df["ITS2 type profile UID"],
             profile_meta_df['ITS2 type profile']
         ))
-        self.sp_profile_uid_to_profile_name_dict = dict(zip(
+        self.sp_profile_name_to_profile_uid_dict = dict(zip(
             profile_meta_df['ITS2 type profile'],
             profile_meta_df["ITS2 type profile UID"]
         ))
@@ -159,6 +226,8 @@ class SchuppFigures:
 
     def _make_sp_seq_abund_df(self):
         seq_count_df = pd.read_csv(self.sp_seq_count_path, sep='\t')
+        seq_count_df = seq_count_df.iloc[:-1, :]
+        seq_count_df.sample_uid = seq_count_df.sample_uid.astype(int)
         self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.sample_uid, seq_count_df.sample_name))
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.sample_uid))
         seq_count_df.set_index(keys='sample_uid', drop=True, inplace=True)
@@ -586,5 +655,37 @@ class HierarchicalPlot(SchuppFigures):
     """
     def __init__(self):
         super().__init__()
+        self.fig = plt.figure(figsize=(10, 10))
+        # 6 down 4 across
+        # TODO we will need to adjust this as we refine the figure
+        self.gs = gridspec.GridSpec(6, 1)
+        self.axes = []
 
-PhysiologicalBasePlot().plot()
+        for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
+            for j, plot_type in enumerate(['hierarchical', 'seq_prof', 'cluster']):
+                self.axes.append(plt.subplot(self.gs[((i * 3) + j):((i * 3) + j) + 1,:]))
+    def plot(self):
+        # Get the list of samples that need plotting
+        # self.sp_between_smp_dist_path_c
+        # self.sp_between_smp_dist_path_d
+
+        # TODO I think that there are extra samples in the symportal data that we don't need to plot
+        # there are 421 samples in the d dist matrix
+        # We already worked out which samples we will be plotting the zooxs data for in the old
+        # code so we should use a modificaiton of that code to get the list of samples
+        # that we should be working with.
+        # The sample names and sample uids that are used in the studies are held in these two objecsts
+        # self.sp_sample_names_of_study, self.sp_sample_uids_of_study
+
+        self.sph_d_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
+        d_sample_uids_in_dist = list(self.sph_d_no_plot.dist_df)
+        # we want to be working with the following intersect
+        d_sample_uids_to_plot = [_ for _ in d_sample_uids_in_dist if _ in self.sp_sample_uids_of_study]
+        d_sample_names_to_plot = [self.sp_sample_uid_to_sample_name_dict[_] for _ in d_sample_uids_to_plot]
+        self.sph_d_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, ax=self.axes[0], sample_uids_included=d_sample_uids_to_plot)
+        self.sph_d_plot.plot()
+        self.axes[0].collections[0].set_linewidth(0.5)
+        foo = 'bar'
+
+
+HierarchicalPlot().plot()
