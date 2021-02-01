@@ -2,9 +2,11 @@ name: schupp_2021_env
 channels:
   - conda-forge
   - bioconda
+  - didillysquat
 dependencies:
   - python=3.8
   - matplotlib
   - pandas
-  - xlrd
   - numpy
+  - openpyxl
+  - sputils
