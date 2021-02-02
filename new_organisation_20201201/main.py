@@ -120,7 +120,7 @@ class SchuppFigures:
         )
         # Create a dictionary that has the sample_uid to relative proportion of the sequence D2d which
         # we will use for the D clustering
-        self.d2d_to_sample_uid = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
+        self.sample_uid_to_d2d_rel_abund_dict = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
         self.sp_profile_rel_abund_df = self.sp_profile_abs_abund_df.div(
             self.sp_profile_abs_abund_df.sum(axis=1), axis=0
         )
@@ -792,50 +792,31 @@ class HierarchicalPlot(SchuppFigures):
         # TO do this I will create dictionaries of these values.
         # self.sample_uid_to_post_med_absolute and self.sample_uid_to_post_med_unique
         # TODO the d clustering it may be easiest to cluster by the presence of the D2d sequence
+        d_samples_to_plot = [uid for uid in self.d_sample_uids_to_plot_non_filtered if (
+                (self.d_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
+                (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10)
+        )]
         axes = [*self.axes[:4]]
         dist_output_path = self.sp_between_smp_dist_path_d
         clade_list = ['D']
-        screening_dict = self.d2d_to_sample_uid
-        dendrogram_sample_uid_order = self._plot_for_clade(axes, clade_list, dist_output_path, screening_dict)
-
+        d_clustering_dict = {(uid):(1 if rel_abund >= 0.01 else 0)  for uid, rel_abund in self.sample_uid_to_d2d_rel_abund_dict.items()}
+        self._plot_for_clade(
+            axes=axes, clade_list=clade_list,
+            dist_output_path=dist_output_path,
+            sample_uids_to_plot=d_samples_to_plot, cluster_dict=d_clustering_dict)
+        plt.show()
+        foo  ='bar'
         # axes = [*self.axes[4:]]
         # dist_output_path = self.sp_between_smp_dist_path_c
         # clade_list = ['C']
-        # screening_dict = self.d2d_to_sample_uid
+        # screening_dict = self.sample_uid_to_d2d_rel_abund_dict
         # self._plot_for_clade(axes, clade_list, dist_output_path, screening_dict)
 
-
-        post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in dendrogram_sample_uid_order]
-        post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in dendrogram_sample_uid_order]
-        abs_kde = stats.gaussian_kde(post_med_absolute_values)
-        unique_kde = stats.gaussian_kde(post_med_unique_values)
-        abs_bins = range(0,50000,int(50000/20))
-        unique_bins = range(0, 40, 2)
-        abs_kde_x = np.linspace(0, 50000, 100)
-        unique_kde_x = np.linspace(0,40,100)
-        self.axes[4].hist(post_med_absolute_values, bins=abs_bins, density=True)
-        self.axes[4].plot(abs_kde_x, abs_kde(abs_kde_x))
-        self.axes[5].hist(post_med_unique_values, bins=unique_bins, density=True)
-        self.axes[5].plot(unique_kde_x, unique_kde(unique_kde_x))
-
-
-        self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-        self.axes[5].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-        ex_absolute = [1000 if _ >= 5000 else 0 for _ in post_med_absolute_values]
-        ex_unique = [1000 if _ >= 10 else 0 for _ in post_med_unique_values]
-        self.axes[6].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
-        self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
-        plt.show()
         foo = 'bar'
 
-    def _plot_for_clade(self, axes, clade_list, dist_output_path, screening_dict):
+    def _plot_for_clade(self, axes, clade_list, dist_output_path, sample_uids_to_plot, cluster_dict):
         if 'C' in clade_list:
             fo = 'bar'
-        sph_no_plot = SPHierarchical(dist_output_path=dist_output_path, no_plotting=True)
-        sample_uids_in_dist = list(sph_no_plot.dist_df)
-        # we want to be working with the following intersect
-        sample_uids_to_plot = [_ for _ in sample_uids_in_dist if _ in self.sp_sample_uids_of_study]
-        sample_names_to_plot = [self.sp_sample_uid_to_sample_name_dict[_] for _ in sample_uids_to_plot]
         sph_plot = SPHierarchical(dist_output_path=dist_output_path, ax=axes[0],
                                   sample_uids_included=sample_uids_to_plot)
         sph_plot.plot()
@@ -853,7 +834,7 @@ class HierarchicalPlot(SchuppFigures):
         spb.plot()
         axes[1].set_xticks([])
         axes[1].set_yticks([])
-        cluster_vals = [1 if screening_dict[_] >= 0.01 else 0 for _ in dendrogram_sample_uid_order]
+        cluster_vals = [cluster_dict[uid] for uid in dendrogram_sample_uid_order]
         axes[2].imshow(np.array(cluster_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
         species_vals = []
         for sample_name in [self.sp_sample_uid_to_sample_name_dict[_] for _ in dendrogram_sample_uid_order]:
@@ -869,4 +850,4 @@ class HierarchicalPlot(SchuppFigures):
         axes[3].imshow(np.array(species_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
         return dendrogram_sample_uid_order
 
-HierarchicalPlot().plot_supporting_histograms()
+HierarchicalPlot().plot_main_hierarchical_clutering_figure()
