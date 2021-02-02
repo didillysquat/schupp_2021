@@ -40,6 +40,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from collections import defaultdict
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 import re
 import itertools
 import sys
@@ -121,6 +122,21 @@ class SchuppFigures:
         # Create a dictionary that has the sample_uid to relative proportion of the sequence D2d which
         # we will use for the D clustering
         self.sample_uid_to_d2d_rel_abund_dict = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
+        self.sample_uid_to_c_cluster_dict = {}
+        for sample_ind in self.sp_seq_rel_abund_df.index:
+            # if C50c makes up more than 5% of the C seqs then class as 'C50c'
+            c_seqs = self.sp_seq_rel_abund_df.loc[sample_ind][[_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith('C') or _.endswith('C'))]]
+            if c_seqs.sum() > 0:
+                tot_c = c_seqs.sum()
+                if c_seqs.C50c / tot_c > 0.15:
+                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C50c'
+                elif c_seqs.C66 / tot_c > 0.15:
+                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C66'
+                elif c_seqs.C1 / tot_c > 0.05:
+                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C1'
+                else:
+                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'other'
+
         self.sp_profile_rel_abund_df = self.sp_profile_abs_abund_df.div(
             self.sp_profile_abs_abund_df.sum(axis=1), axis=0
         )
@@ -692,6 +708,14 @@ class HierarchicalPlot(SchuppFigures):
     """
     def __init__(self):
         super().__init__()
+        # Get the colours of the seqs and profiles by doing a no plot bar
+        spb = SPBars(
+            seq_count_table_path=self.sp_seq_count_path,
+            profile_count_table_path=self.sp_profile_abund_and_meta_path,
+            plot_type='seq_and_profile', orientation='v', legend=False, relative_abundance=True
+        )
+        self.seq_color_dict = spb.seq_color_dict
+        self.profile_color_dict = spb.profile_color_dict
         # Get the D samples to plot
         self.d_sph_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
         self.d_sample_uids_in_dist = list(self.d_sph_no_plot.dist_df)
@@ -705,6 +729,9 @@ class HierarchicalPlot(SchuppFigures):
         self.c_sample_uids_to_plot_non_filtered = [_ for _ in self.c_sample_uids_in_dist if
                                                    _ in self.sp_sample_uids_of_study]
 
+        self.species_c_map = {'digitifera': '#D0CFD4', 'surculosa':'#89888D', 'purpurea':'#4A4A4C', 'damicornis':'#D4D5D0'}
+        self.d_cluster_c_map = {'D1/D2d': '#D0CFD4', 'D1/D4':'#8A8C82'}
+        self.c_cluster_c_map = {'C1': '#D0CFD4', 'C50c': '#89888D', 'C66': '#4A4A4C', 'other': '#D4D5D0'}
     def plot_supporting_histograms(self):
         # TODO it would make most sense to screen by relative abundance of the given clade in the sample
         # as well as the absolute and uniqu so we should make a dict for that too
@@ -800,33 +827,72 @@ class HierarchicalPlot(SchuppFigures):
             for j, plot_type in enumerate(plot_tyes):
                 self.axes.append(plt.subplot(self.gs[j: j + 1, :]))
 
-            axes = [*self.axes[:4]]
-            dist_output_path = self.sp_between_smp_dist_path_d
-            clade_list = ['D']
-            d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
-                                 self.sample_uid_to_d2d_rel_abund_dict.items()}
-            self._plot_for_clade(
-                axes=axes, clade_list=clade_list,
-                dist_output_path=dist_output_path,
-                sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=d_clustering_dict)
+            if clade == 'D':
+                axes = [*self.axes[:4]]
+                dist_output_path = self.sp_between_smp_dist_path_d
+                clade_list = ['D']
+                d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
+                                     self.sample_uid_to_d2d_rel_abund_dict.items()}
+                self._plot_for_clade(
+                    axes=axes, clade_list=clade_list,
+                    dist_output_path=dist_output_path,
+                    sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=d_clustering_dict)
 
-            foo = 'bar'
-            post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-            self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-            ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
-            self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+                foo = 'bar'
+                post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+                self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
+                self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
 
-            post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-            self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-            ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
-            self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+                post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+                self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
+                self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
 
-            post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
-                                      self.d_sample_uids_to_plot_non_filtered]
-            self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-            ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
-            self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+                post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                                          self.d_sample_uids_to_plot_non_filtered]
+                self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
+                self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+            elif clade == 'C':
+                axes = [*self.axes[:4]]
+                dist_output_path = self.sp_between_smp_dist_path_c
+                clade_list = ['C']
+                cluster_to_number_map = {'C1': 0, 'C50c': 0.25, 'C66': 0.5, 'other': 1}
+                c_clustering_dict = {uid: cluster_to_number_map[self.sample_uid_to_c_cluster_dict[uid]] for uid in
+                                     self.c_sample_uids_to_plot_non_filtered}
+                self._plot_for_clade(
+                    axes=axes, clade_list=clade_list,
+                    dist_output_path=dist_output_path,
+                    sample_uids_to_plot=self.c_sample_uids_to_plot_non_filtered, cluster_dict=c_clustering_dict)
 
+                foo = 'bar'
+                post_med_absolute_values = [self.c_sample_uid_to_post_med_absolute_dict[_] for _ in
+                                            self.c_sample_uids_to_plot_non_filtered]
+                self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
+                self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+                post_med_unique_values = [self.c_sample_uid_to_post_med_unique_dict[_] for _ in
+                                          self.c_sample_uids_to_plot_non_filtered]
+                self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
+                self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+                post_med_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                                            self.c_sample_uids_to_plot_non_filtered]
+                self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
+                self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+            print('saving svg')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"supporting_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                        dpi=1200)
+            print('saving png')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"supporting_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                        dpi=1200)
             foo = 'bar'
 
     def plot_main_hierarchical_clutering_figure(self):
@@ -836,7 +902,7 @@ class HierarchicalPlot(SchuppFigures):
         self.fig = plt.figure(figsize=(10, 10))
         # 6 down 4 across
         # TODO we will need to adjust this as we refine the figure
-        self.gs = gridspec.GridSpec(8, 1)
+        self.gs = gridspec.GridSpec(10, 1)
         self.axes = []
         plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species']
         for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
@@ -865,63 +931,124 @@ class HierarchicalPlot(SchuppFigures):
         # TO do this I will create dictionaries of these values.
         # self.sample_uid_to_post_med_absolute and self.sample_uid_to_post_med_unique
         # TODO the d clustering it may be easiest to cluster by the presence of the D2d sequence
+        # Plot D
         d_samples_to_plot = [uid for uid in self.d_sample_uids_to_plot_non_filtered if (
                 (self.d_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
                 (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10) and
                 (self.d_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
         )]
-        axes = [*self.axes[:4]]
+        axes = [*self.axes[:5]]
         dist_output_path = self.sp_between_smp_dist_path_d
         clade_list = ['D']
-        d_clustering_dict = {(uid):(1 if rel_abund >= 0.01 else 0)  for uid, rel_abund in self.sample_uid_to_d2d_rel_abund_dict.items()}
+        d_clustering_dict = {(uid):('D1/D2d' if rel_abund >= 0.01 else 'D1/D4')  for uid, rel_abund in self.sample_uid_to_d2d_rel_abund_dict.items()}
         self._plot_for_clade(
             axes=axes, clade_list=clade_list,
             dist_output_path=dist_output_path,
-            sample_uids_to_plot=d_samples_to_plot, cluster_dict=d_clustering_dict)
+            sample_uids_to_plot=d_samples_to_plot, cluster_dict=d_clustering_dict, cluster_c_map=self.d_cluster_c_map)
+
 
         foo  ='bar'
+        c_samples_to_plot = [uid for uid in self.c_sample_uids_to_plot_non_filtered if (
+                (self.c_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
+                (self.c_sample_uid_to_post_med_unique_dict[uid] >= 10) and
+                (self.c_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
+        )]
         axes = [*self.axes[4:]]
         dist_output_path = self.sp_between_smp_dist_path_c
         clade_list = ['C']
-        screening_dict = self.sample_uid_to_d2d_rel_abund_dict
-        self._plot_for_clade(axes, clade_list, dist_output_path, self.c_sample_uids_to_plot_non_filtered, cluster_dict={})
+
+        c_clustering_dict = {uid: self.sample_uid_to_c_cluster_dict[uid] for uid in
+                             self.c_sample_uids_to_plot_non_filtered}
+        self._plot_for_clade(
+            axes=axes, clade_list=clade_list,
+            dist_output_path=dist_output_path, sample_uids_to_plot=c_samples_to_plot,
+            cluster_dict=c_clustering_dict, cluster_c_map=self.c_cluster_c_map
+        )
 
         foo = 'bar'
+        print('saving svg')
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"main_hierarchical_clustering_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                    dpi=1200)
+        print('saving png')
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"main_hierarchical_clustering_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                    dpi=1200)
 
-    def _plot_for_clade(self, axes, clade_list, dist_output_path, sample_uids_to_plot, cluster_dict):
-        if 'C' in clade_list:
-            fo = 'bar'
+    def switch_off_spines(self, ax):
+        ax.spines['top'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+
+    def _plot_for_clade(self, axes, clade_list, dist_output_path, sample_uids_to_plot, cluster_dict, cluster_c_map):
+
         sph_plot = SPHierarchical(dist_output_path=dist_output_path, ax=axes[0],
                                   sample_uids_included=sample_uids_to_plot)
         sph_plot.plot()
         # Thin out the lines
         axes[0].collections[0].set_linewidth(0.5)
+        self.switch_off_spines(ax=axes[0])
         dendrogram_sample_uid_order = sph_plot.dendrogram['ivl']
         # Now plot up the sequences and profiles
         spb = SPBars(
             seq_count_table_path=self.sp_seq_count_path,
             profile_count_table_path=self.sp_profile_abund_and_meta_path,
-            plot_type='seq_and_profile', orientation='h', legend=False, relative_abundance=True,
+            plot_type='seq_only', orientation='h', legend=False, relative_abundance=True,
             sample_uids_included=dendrogram_sample_uid_order, bar_ax=axes[1], limit_genera=clade_list,
-            seq_profile_scalar=(1.0, 0.3)
+            seq_profile_scalar=(1.0, 0.3), seq_color_dict=self.seq_color_dict,
+            profile_color_dict=self.profile_color_dict
         )
         spb.plot()
         axes[1].set_xticks([])
         axes[1].set_yticks([])
         cluster_vals = [cluster_dict[uid] for uid in dendrogram_sample_uid_order]
-        axes[2].imshow(np.array(cluster_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
-        species_vals = []
-        for sample_name in [self.sp_sample_uid_to_sample_name_dict[_] for _ in dendrogram_sample_uid_order]:
-            host_species = self.sp_datasheet_df.at[sample_name, 'host_species']
-            if host_species == 'digitifera':
-                species_vals.append(0)
-            elif host_species == 'surculosa':
-                species_vals.append(0.25)
-            elif host_species == 'purpurea':
-                species_vals.append(0.5)
-            elif host_species == 'damicornis':
-                species_vals.append(1)
-        axes[3].imshow(np.array(species_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
-        return dendrogram_sample_uid_order
+        self.plot_categorical_bars(ax=axes[2], cat_list=cluster_vals, c_map=cluster_c_map)
+        species_vals = [self.sp_datasheet_df.at[self.sp_sample_uid_to_sample_name_dict[_], 'host_species'] for _ in dendrogram_sample_uid_order]
+
+        self.plot_categorical_bars(ax=axes[3], cat_list=species_vals, c_map=self.species_c_map)
+
+        if 'C' in clade_list:
+            axes[0].set_title('Cladocopium', fontsize='medium', style='italic')
+        else:
+            axes[0].set_title('Durusdinium', fontsize='medium', style='italic')
+        for ax in axes:
+            ax.set_xticks([])
+        for ax in axes[1:]:
+            ax.set_yticks([])
+        axes[0].set_ylabel('BrayCurtis\ndissimilarity', fontsize='small')
+        axes[1].set_ylabel('ITS2 sequence\ndiversity', fontsize='small')
+        axes[2].set_ylabel('assigned\ncluster', fontsize='small')
+        axes[3].set_ylabel('host\nspecies', fontsize='small')
+
+    def plot_categorical_bars(self, ax, cat_list, c_map):
+        # TODO accept an acutal colour map and use this for the rectangles
+        left = 0
+        rect_list = []
+        if type(c_map) == mpl.colors.ListedColormap:
+            # normalise the cat_list
+            cat_list = np.array(cat_list)
+            min_max_scaler = MinMaxScaler()
+            cat_list_norm = min_max_scaler.fit_transform(cat_list)
+            # Working with a custom colour dict
+            for cat_item in cat_list:
+                rect_list.append(Rectangle(
+                    (left, 0),
+                    1,
+                    1, color=c_map(cat_item)))
+                left += 1
+        else:
+            # Working with a colour dict
+            for cat_item in cat_list:
+                rect_list.append(Rectangle(
+                    (left, 0),
+                    1,
+                    1, color=c_map[cat_item]))
+                left += 1
+        patches_collection = PatchCollection(rect_list, match_original=True)
+        ax.add_collection(patches_collection)
+        ax.set_xlim(0, len(cat_list))
+        ax.set_ylim(0, 1)
+
 
 HierarchicalPlot().plot_main_hierarchical_clutering_figure()
