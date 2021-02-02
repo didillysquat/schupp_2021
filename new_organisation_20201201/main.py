@@ -709,13 +709,14 @@ class HierarchicalPlot(SchuppFigures):
     def __init__(self):
         super().__init__()
         # Get the colours of the seqs and profiles by doing a no plot bar
-        spb = SPBars(
+        self.spb = SPBars(
             seq_count_table_path=self.sp_seq_count_path,
             profile_count_table_path=self.sp_profile_abund_and_meta_path,
-            plot_type='seq_and_profile', orientation='v', legend=False, relative_abundance=True
+            plot_type='seq_only', orientation='v', legend=False, relative_abundance=True,
+            limit_genera=['C', 'D']
         )
-        self.seq_color_dict = spb.seq_color_dict
-        self.profile_color_dict = spb.profile_color_dict
+        self.seq_color_dict = self.spb.seq_color_dict
+        self.profile_color_dict = self.spb.profile_color_dict
         # Get the D samples to plot
         self.d_sph_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
         self.d_sample_uids_in_dist = list(self.d_sph_no_plot.dist_df)
@@ -902,12 +903,19 @@ class HierarchicalPlot(SchuppFigures):
         self.fig = plt.figure(figsize=(10, 10))
         # 6 down 4 across
         # TODO we will need to adjust this as we refine the figure
-        self.gs = gridspec.GridSpec(10, 1)
+        self.gs = gridspec.GridSpec(8, 3)
         self.axes = []
         plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species']
         for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
             for j, plot_type in enumerate(plot_tyes):
-                self.axes.append(plt.subplot(self.gs[((i * len(plot_tyes)) + j):((i * len(plot_tyes)) + j) + 1, :]))
+                if i == 0:
+                    self.axes.append(plt.subplot(self.gs[((i * len(plot_tyes)) + j):((i * len(plot_tyes)) + j) + 1, :]))
+                else:
+                    self.axes.append(plt.subplot(self.gs[((i * len(plot_tyes)) + j):((i * len(plot_tyes)) + j) + 1, :2]))
+        # Legend axis
+        self.leg_ax = plt.subplot(self.gs[4:, 2:])
+        self.spb.plot_only_legend(seq_leg_ax=self.leg_ax)
+        self.leg_ax.set_title('20 most abundant\nITS2 sequences')
         # TODO we need to plot up the unique and aboslute post-meds on a clade split basis
         # particularly for C I expect this to get rid of a large proportion of the sampls.
 
@@ -937,7 +945,7 @@ class HierarchicalPlot(SchuppFigures):
                 (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10) and
                 (self.d_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
         )]
-        axes = [*self.axes[:5]]
+        axes = [*self.axes[:4]]
         dist_output_path = self.sp_between_smp_dist_path_d
         clade_list = ['D']
         d_clustering_dict = {(uid):('D1/D2d' if rel_abund >= 0.01 else 'D1/D4')  for uid, rel_abund in self.sample_uid_to_d2d_rel_abund_dict.items()}
@@ -966,6 +974,7 @@ class HierarchicalPlot(SchuppFigures):
         )
 
         foo = 'bar'
+        plt.tight_layout()
         print('saving svg')
         plt.savefig(os.path.join(self.root_dir, 'figures',
                                  f"main_hierarchical_clustering_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
@@ -1014,8 +1023,8 @@ class HierarchicalPlot(SchuppFigures):
             axes[0].set_title('Durusdinium', fontsize='medium', style='italic')
         for ax in axes:
             ax.set_xticks([])
-        for ax in axes[1:]:
             ax.set_yticks([])
+
         axes[0].set_ylabel('BrayCurtis\ndissimilarity', fontsize='small')
         axes[1].set_ylabel('ITS2 sequence\ndiversity', fontsize='small')
         axes[2].set_ylabel('assigned\ncluster', fontsize='small')
