@@ -241,20 +241,28 @@ class SchuppFigures:
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.index.values))
         index_of_first_seq = list(seq_count_df).index("A3")
         seq_count_df = seq_count_df.iloc[:-1, index_of_first_seq:]
-        self.c_sample_uid_to_post_med_absolute_dict, self.c_sample_uid_to_post_med_unique_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(clade='C', seq_count_df=seq_count_df)
-        self.d_sample_uid_to_post_med_absolute_dict, self.d_sample_uid_to_post_med_unique_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(
+        self.c_sample_uid_to_post_med_absolute_dict, self.c_sample_uid_to_post_med_unique_dict, self.c_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(clade='C', seq_count_df=seq_count_df)
+        self.d_sample_uid_to_post_med_absolute_dict, self.d_sample_uid_to_post_med_unique_dict, self.d_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(
             clade='D', seq_count_df=seq_count_df)
         return seq_count_df
 
     def _make_clade_specific_post_med_absolute_and_unique_dicts(self, clade, seq_count_df):
         abs_dict = {}
         unique_dict = {}
+        rel_dict = {}
         for sample_ind in seq_count_df.index:
             ser = seq_count_df.loc[sample_ind][list([_ for _ in seq_count_df if (_.startswith(clade) or _.endswith(clade))])]
             ser = ser[ser != 0]
-            abs_dict[sample_ind] = ser.sum()
+            clade_abs_abund = ser.sum()
+            tot_sample_abs_abund = seq_count_df.loc[sample_ind].sum()
+            abs_dict[sample_ind] = clade_abs_abund
             unique_dict[sample_ind] = len(ser)
-        return abs_dict, unique_dict
+            if clade_abs_abund == 0 or tot_sample_abs_abund == 0:
+                rel_dict[sample_ind] = 0
+            else:
+                rel_dict[sample_ind] = ser.sum()/seq_count_df.loc[sample_ind].sum()
+
+        return abs_dict, unique_dict, rel_dict
 
 
     def _make_sp_datasheet_df(self):
@@ -698,11 +706,13 @@ class HierarchicalPlot(SchuppFigures):
                                                    _ in self.sp_sample_uids_of_study]
 
     def plot_supporting_histograms(self):
+        # TODO it would make most sense to screen by relative abundance of the given clade in the sample
+        # as well as the absolute and uniqu so we should make a dict for that too
         fig = plt.figure(figsize=(10, 10))
-        # 6 down 4 across
-        gs = gridspec.GridSpec(2, 2)
+        # 2 down 3 across
+        gs = gridspec.GridSpec(2, 3)
         axes = []
-        plot_tyes = ['post_med_absolute', 'post_med_unique']
+        plot_tyes = ['post_med_absolute', 'post_med_unique', 'relative']
         for i, genus in enumerate(['C', 'D']):
             for j, plot_type in enumerate(plot_tyes):
                 axes.append(plt.subplot(gs[i:i+1, j:j+1]))
@@ -727,16 +737,27 @@ class HierarchicalPlot(SchuppFigures):
         axes[1].set_title('Durusdinium: post-MED unique sequences')
         axes[1].set_xlabel('post-MED unique sequences')
 
+        # D relative
+        d_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                                    self.d_sample_uids_to_plot_non_filtered]
+        d_rel_kde = stats.gaussian_kde(d_relative_values)
+        d_rel_bins = np.arange(0, 1, 1/20)
+        d_rel_kde_x = np.linspace(0, 1, 100)
+        axes[2].hist(d_relative_values, bins=d_rel_bins, density=True)
+        axes[2].plot(d_rel_kde_x, d_rel_kde(d_rel_kde_x))
+        axes[2].set_title('Durusdinium: relative abundance in sample')
+        axes[2].set_xlabel('relative abundance in sample')
+
         # C absolute
         c_post_med_absolute_values = [self.c_sample_uid_to_post_med_absolute_dict[_] for _ in
                                         self.c_sample_uids_to_plot_non_filtered]
         c_abs_kde = stats.gaussian_kde(c_post_med_absolute_values)
         c_abs_bins = range(0, 50000, int(50000 / 20))
         c_abs_kde_x = np.linspace(0, 50000, 100)
-        axes[2].hist(c_post_med_absolute_values, bins=c_abs_bins, density=True)
-        axes[2].plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x))
-        axes[2].set_title('Cladocopium: post-MED absolute sequences')
-        axes[2].set_xlabel('post-MED absolute sequences')
+        axes[3].hist(c_post_med_absolute_values, bins=c_abs_bins, density=True)
+        axes[3].plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x))
+        axes[3].set_title('Cladocopium: post-MED absolute sequences')
+        axes[3].set_xlabel('post-MED absolute sequences')
 
         # C unique
         c_post_med_unique_values = [self.c_sample_uid_to_post_med_unique_dict[_] for _ in
@@ -744,10 +765,21 @@ class HierarchicalPlot(SchuppFigures):
         c_unique_kde = stats.gaussian_kde(c_post_med_unique_values)
         c_unique_bins = range(0, 40, 2)
         c_unique_kde_x = np.linspace(0, 40, 100)
-        axes[3].hist(c_post_med_unique_values, bins=c_unique_bins, density=True)
-        axes[3].plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x))
-        axes[3].set_title('Cladocopium: post-MED unique sequences')
-        axes[3].set_xlabel('post-MED unique sequences')
+        axes[4].hist(c_post_med_unique_values, bins=c_unique_bins, density=True)
+        axes[4].plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x))
+        axes[4].set_title('Cladocopium: post-MED unique sequences')
+        axes[4].set_xlabel('post-MED unique sequences')
+
+        # C relative
+        c_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                             self.c_sample_uids_to_plot_non_filtered]
+        c_rel_kde = stats.gaussian_kde(c_relative_values)
+        c_rel_bins = np.arange(0, 1, 1/20)
+        c_rel_kde_x = np.linspace(0, 1, 100)
+        axes[5].hist(c_relative_values, bins=c_rel_bins, density=True)
+        axes[5].plot(c_rel_kde_x, c_rel_kde(c_rel_kde_x))
+        axes[5].set_title('Cladocopium: relative abundance in sample')
+        axes[5].set_xlabel('relative abundance in sample')
 
         plt.savefig(os.path.join(self.root_dir, 'figures',
                                  f"sup_histograms_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
@@ -755,6 +787,47 @@ class HierarchicalPlot(SchuppFigures):
         plt.savefig(os.path.join(self.root_dir, 'figures',
                                  f"sup_histograms_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
                     dpi=1200)
+
+    def plot_supporting_hierarcical_clustering_figure(self):
+        for clade in ['C', 'D']:
+            self.fig = plt.figure(figsize=(10, 10))
+            # 8 down 1 across
+            # TODO we will need to adjust this as we refine the figure
+            self.gs = gridspec.GridSpec(10, 1)
+            self.axes = []
+            plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species', 'absolute', 'unique', 'relative', 'absolute_bin', 'unique_bin', 'relative_bin']
+
+            for j, plot_type in enumerate(plot_tyes):
+                self.axes.append(plt.subplot(self.gs[j: j + 1, :]))
+
+            axes = [*self.axes[:4]]
+            dist_output_path = self.sp_between_smp_dist_path_d
+            clade_list = ['D']
+            d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
+                                 self.sample_uid_to_d2d_rel_abund_dict.items()}
+            self._plot_for_clade(
+                axes=axes, clade_list=clade_list,
+                dist_output_path=dist_output_path,
+                sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=d_clustering_dict)
+
+            foo = 'bar'
+            post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+            self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+            ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
+            self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+            post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+            self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+            ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
+            self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+            post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                                      self.d_sample_uids_to_plot_non_filtered]
+            self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+            ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
+            self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+
+            foo = 'bar'
 
     def plot_main_hierarchical_clutering_figure(self):
         # Get the list of samples that need plotting
@@ -794,7 +867,8 @@ class HierarchicalPlot(SchuppFigures):
         # TODO the d clustering it may be easiest to cluster by the presence of the D2d sequence
         d_samples_to_plot = [uid for uid in self.d_sample_uids_to_plot_non_filtered if (
                 (self.d_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
-                (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10)
+                (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10) and
+                (self.d_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
         )]
         axes = [*self.axes[:4]]
         dist_output_path = self.sp_between_smp_dist_path_d
@@ -804,13 +878,13 @@ class HierarchicalPlot(SchuppFigures):
             axes=axes, clade_list=clade_list,
             dist_output_path=dist_output_path,
             sample_uids_to_plot=d_samples_to_plot, cluster_dict=d_clustering_dict)
-        plt.show()
+
         foo  ='bar'
-        # axes = [*self.axes[4:]]
-        # dist_output_path = self.sp_between_smp_dist_path_c
-        # clade_list = ['C']
-        # screening_dict = self.sample_uid_to_d2d_rel_abund_dict
-        # self._plot_for_clade(axes, clade_list, dist_output_path, screening_dict)
+        axes = [*self.axes[4:]]
+        dist_output_path = self.sp_between_smp_dist_path_c
+        clade_list = ['C']
+        screening_dict = self.sample_uid_to_d2d_rel_abund_dict
+        self._plot_for_clade(axes, clade_list, dist_output_path, self.c_sample_uids_to_plot_non_filtered, cluster_dict={})
 
         foo = 'bar'
 
