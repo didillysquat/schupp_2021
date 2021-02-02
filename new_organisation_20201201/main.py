@@ -51,6 +51,7 @@ from datetime import datetime
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 from sputils.spbars import SPBars
 from sputils.sphierarchical import SPHierarchical
+from scipy import stats
 
 
 class SchuppFigures:
@@ -117,6 +118,9 @@ class SchuppFigures:
         self.sp_seq_rel_abund_df = self.sp_seq_abs_abund_df.div(
             self.sp_seq_abs_abund_df.sum(axis=1), axis=0
         )
+        # Create a dictionary that has the sample_uid to relative proportion of the sequence D2d which
+        # we will use for the D clustering
+        self.d2d_to_sample_uid = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
         self.sp_profile_rel_abund_df = self.sp_profile_abs_abund_df.div(
             self.sp_profile_abs_abund_df.sum(axis=1), axis=0
         )
@@ -232,14 +236,26 @@ class SchuppFigures:
         seq_count_df = pd.read_csv(self.sp_seq_count_path, sep='\t')
         seq_count_df = seq_count_df.iloc[:-1, :]
         seq_count_df.sample_uid = seq_count_df.sample_uid.astype(int)
-        self.sample_uid_to_post_med_absolute = dict(zip(seq_count_df.sample_uid, seq_count_df.post_med_absolute.astype(int)))
-        self.sample_uid_to_post_med_unique = dict(zip(seq_count_df.sample_uid, seq_count_df.post_med_unique.astype(int)))
-        self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.sample_uid, seq_count_df.sample_name))
-        self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.sample_uid))
         seq_count_df.set_index(keys='sample_uid', drop=True, inplace=True)
+        self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.index.values, seq_count_df.sample_name))
+        self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.index.values))
         index_of_first_seq = list(seq_count_df).index("A3")
         seq_count_df = seq_count_df.iloc[:-1, index_of_first_seq:]
+        self.c_sample_uid_to_post_med_absolute_dict, self.c_sample_uid_to_post_med_unique_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(clade='C', seq_count_df=seq_count_df)
+        self.d_sample_uid_to_post_med_absolute_dict, self.d_sample_uid_to_post_med_unique_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(
+            clade='D', seq_count_df=seq_count_df)
         return seq_count_df
+
+    def _make_clade_specific_post_med_absolute_and_unique_dicts(self, clade, seq_count_df):
+        abs_dict = {}
+        unique_dict = {}
+        for sample_ind in seq_count_df.index:
+            ser = seq_count_df.loc[sample_ind][list([_ for _ in seq_count_df if (_.startswith(clade) or _.endswith(clade))])]
+            ser = ser[ser != 0]
+            abs_dict[sample_ind] = ser.sum()
+            unique_dict[sample_ind] = len(ser)
+        return abs_dict, unique_dict
+
 
     def _make_sp_datasheet_df(self):
         sp_ds_df = pd.read_excel(io=self.sp_datasheet_path, skiprows=[0], engine='openpyxl')
@@ -658,23 +674,109 @@ class HierarchicalPlot(SchuppFigures):
     Top will be the hierarchical cluster plot
     Middle will be the sequences and profiles in order of the hierarchical plot
     Bottom will indicate the artiical clustering by us
+    bottom again will be host species
+
+    We will also produce a seperate set of supporting figure that are
+    histograms of the the post_med_absolute and post_med_unique (clade separated)
+    sequences for the samples. We will use these to justify the filtering
+    of samples that we will implement for the main figure.
+    For D will not use those samples with <10 unique D seqs and <5000 absolute sequences
     """
     def __init__(self):
         super().__init__()
-        self.fig = plt.figure(figsize=(10, 10))
+        # Get the D samples to plot
+        self.d_sph_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
+        self.d_sample_uids_in_dist = list(self.d_sph_no_plot.dist_df)
+        # we want to be working with the following intersect
+        self.d_sample_uids_to_plot_non_filtered = [_ for _ in self.d_sample_uids_in_dist if _ in self.sp_sample_uids_of_study]
+
+        # Get the D samples to plot
+        self.c_sph_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_c, no_plotting=True)
+        self.c_sample_uids_in_dist = list(self.c_sph_no_plot.dist_df)
+        # we want to be working with the following intersect
+        self.c_sample_uids_to_plot_non_filtered = [_ for _ in self.c_sample_uids_in_dist if
+                                                   _ in self.sp_sample_uids_of_study]
+
+    def plot_supporting_histograms(self):
+        fig = plt.figure(figsize=(10, 10))
         # 6 down 4 across
-        # TODO we will need to adjust this as we refine the figure
-        self.gs = gridspec.GridSpec(6, 1)
-        self.axes = []
+        gs = gridspec.GridSpec(2, 2)
+        axes = []
+        plot_tyes = ['post_med_absolute', 'post_med_unique']
+        for i, genus in enumerate(['C', 'D']):
+            for j, plot_type in enumerate(plot_tyes):
+                axes.append(plt.subplot(gs[i:i+1, j:j+1]))
 
-        for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
-            for j, plot_type in enumerate(['hierarchical', 'seq_prof', 'cluster']):
-                self.axes.append(plt.subplot(self.gs[((i * 3) + j):((i * 3) + j) + 1,:]))
+        # D absolute
+        d_post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+        d_abs_kde = stats.gaussian_kde(d_post_med_absolute_values)
+        d_abs_bins = range(0, 50000, int(50000 / 20))
+        d_abs_kde_x = np.linspace(0, 50000, 100)
+        axes[0].hist(d_post_med_absolute_values, bins=d_abs_bins, density=True)
+        axes[0].plot(d_abs_kde_x, d_abs_kde(d_abs_kde_x))
+        axes[0].set_title('Durusdinium: post-MED absolute sequences')
+        axes[0].set_xlabel('post-MED absolute sequences')
 
-    def plot(self):
+        # D unique
+        d_post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
+        d_unique_kde = stats.gaussian_kde(d_post_med_unique_values)
+        d_unique_bins = range(0, 40, 2)
+        d_unique_kde_x = np.linspace(0, 40, 100)
+        axes[1].hist(d_post_med_unique_values, bins=d_unique_bins, density=True)
+        axes[1].plot(d_unique_kde_x, d_unique_kde(d_unique_kde_x))
+        axes[1].set_title('Durusdinium: post-MED unique sequences')
+        axes[1].set_xlabel('post-MED unique sequences')
+
+        # C absolute
+        c_post_med_absolute_values = [self.c_sample_uid_to_post_med_absolute_dict[_] for _ in
+                                        self.c_sample_uids_to_plot_non_filtered]
+        c_abs_kde = stats.gaussian_kde(c_post_med_absolute_values)
+        c_abs_bins = range(0, 50000, int(50000 / 20))
+        c_abs_kde_x = np.linspace(0, 50000, 100)
+        axes[2].hist(c_post_med_absolute_values, bins=c_abs_bins, density=True)
+        axes[2].plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x))
+        axes[2].set_title('Cladocopium: post-MED absolute sequences')
+        axes[2].set_xlabel('post-MED absolute sequences')
+
+        # C unique
+        c_post_med_unique_values = [self.c_sample_uid_to_post_med_unique_dict[_] for _ in
+                                  self.c_sample_uids_to_plot_non_filtered]
+        c_unique_kde = stats.gaussian_kde(c_post_med_unique_values)
+        c_unique_bins = range(0, 40, 2)
+        c_unique_kde_x = np.linspace(0, 40, 100)
+        axes[3].hist(c_post_med_unique_values, bins=c_unique_bins, density=True)
+        axes[3].plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x))
+        axes[3].set_title('Cladocopium: post-MED unique sequences')
+        axes[3].set_xlabel('post-MED unique sequences')
+
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"sup_histograms_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                    dpi=1200)
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"sup_histograms_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                    dpi=1200)
+
+    def plot_main_hierarchical_clutering_figure(self):
         # Get the list of samples that need plotting
         # self.sp_between_smp_dist_path_c
         # self.sp_between_smp_dist_path_d
+        self.fig = plt.figure(figsize=(10, 10))
+        # 6 down 4 across
+        # TODO we will need to adjust this as we refine the figure
+        self.gs = gridspec.GridSpec(8, 1)
+        self.axes = []
+        plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species']
+        for i, genus in enumerate(['Durusdinium', 'Cladocopium']):
+            for j, plot_type in enumerate(plot_tyes):
+                self.axes.append(plt.subplot(self.gs[((i * len(plot_tyes)) + j):((i * len(plot_tyes)) + j) + 1, :]))
+        # TODO we need to plot up the unique and aboslute post-meds on a clade split basis
+        # particularly for C I expect this to get rid of a large proportion of the sampls.
+
+        # For D it looks like we can screen out most of the bad distances using a conservative
+        # filtering based on post_med_absolute and post_med_unique
+        # We will justify the quantificaiton of the cutoff using a historgram and kde that can
+        # be put into the supplementary materials but this should certainly be output as a figure
+
 
         # TODO I think that there are extra samples in the symportal data that we don't need to plot
         # there are 421 samples in the d dist matrix
@@ -689,28 +791,70 @@ class HierarchicalPlot(SchuppFigures):
         # As such I quickly want to visualise these values in the same order as the hierarchical clustering
         # TO do this I will create dictionaries of these values.
         # self.sample_uid_to_post_med_absolute and self.sample_uid_to_post_med_unique
+        # TODO the d clustering it may be easiest to cluster by the presence of the D2d sequence
+        axes = [*self.axes[:4]]
+        dist_output_path = self.sp_between_smp_dist_path_d
+        clade_list = ['D']
+        screening_dict = self.d2d_to_sample_uid
+        dendrogram_sample_uid_order = self._plot_for_clade(axes, clade_list, dist_output_path, screening_dict)
 
-        self.sph_d_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
-        d_sample_uids_in_dist = list(self.sph_d_no_plot.dist_df)
+        # axes = [*self.axes[4:]]
+        # dist_output_path = self.sp_between_smp_dist_path_c
+        # clade_list = ['C']
+        # screening_dict = self.d2d_to_sample_uid
+        # self._plot_for_clade(axes, clade_list, dist_output_path, screening_dict)
+
+
+        post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in dendrogram_sample_uid_order]
+        post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in dendrogram_sample_uid_order]
+        abs_kde = stats.gaussian_kde(post_med_absolute_values)
+        unique_kde = stats.gaussian_kde(post_med_unique_values)
+        abs_bins = range(0,50000,int(50000/20))
+        unique_bins = range(0, 40, 2)
+        abs_kde_x = np.linspace(0, 50000, 100)
+        unique_kde_x = np.linspace(0,40,100)
+        self.axes[4].hist(post_med_absolute_values, bins=abs_bins, density=True)
+        self.axes[4].plot(abs_kde_x, abs_kde(abs_kde_x))
+        self.axes[5].hist(post_med_unique_values, bins=unique_bins, density=True)
+        self.axes[5].plot(unique_kde_x, unique_kde(unique_kde_x))
+
+
+        self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+        self.axes[5].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+        ex_absolute = [1000 if _ >= 5000 else 0 for _ in post_med_absolute_values]
+        ex_unique = [1000 if _ >= 10 else 0 for _ in post_med_unique_values]
+        self.axes[6].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+        self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+        plt.show()
+        foo = 'bar'
+
+    def _plot_for_clade(self, axes, clade_list, dist_output_path, screening_dict):
+        if 'C' in clade_list:
+            fo = 'bar'
+        sph_no_plot = SPHierarchical(dist_output_path=dist_output_path, no_plotting=True)
+        sample_uids_in_dist = list(sph_no_plot.dist_df)
         # we want to be working with the following intersect
-        d_sample_uids_to_plot = [_ for _ in d_sample_uids_in_dist if _ in self.sp_sample_uids_of_study]
-        d_sample_names_to_plot = [self.sp_sample_uid_to_sample_name_dict[_] for _ in d_sample_uids_to_plot]
-        self.sph_d_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, ax=self.axes[0], sample_uids_included=d_sample_uids_to_plot)
-        self.sph_d_plot.plot()
+        sample_uids_to_plot = [_ for _ in sample_uids_in_dist if _ in self.sp_sample_uids_of_study]
+        sample_names_to_plot = [self.sp_sample_uid_to_sample_name_dict[_] for _ in sample_uids_to_plot]
+        sph_plot = SPHierarchical(dist_output_path=dist_output_path, ax=axes[0],
+                                  sample_uids_included=sample_uids_to_plot)
+        sph_plot.plot()
         # Thin out the lines
-        self.axes[0].collections[0].set_linewidth(0.5)
-        dendrogram_sample_uid_order = self.sph_d_plot.dendrogram['ivl']
+        axes[0].collections[0].set_linewidth(0.5)
+        dendrogram_sample_uid_order = sph_plot.dendrogram['ivl']
         # Now plot up the sequences and profiles
         spb = SPBars(
             seq_count_table_path=self.sp_seq_count_path,
             profile_count_table_path=self.sp_profile_abund_and_meta_path,
             plot_type='seq_and_profile', orientation='h', legend=False, relative_abundance=True,
-            sample_uids_included=dendrogram_sample_uid_order, bar_ax=self.axes[1], limit_genera=['D'],
+            sample_uids_included=dendrogram_sample_uid_order, bar_ax=axes[1], limit_genera=clade_list,
             seq_profile_scalar=(1.0, 0.3)
         )
         spb.plot()
-        self.axes[1].set_xticks([])
-        self.axes[1].set_yticks([])
+        axes[1].set_xticks([])
+        axes[1].set_yticks([])
+        cluster_vals = [1 if screening_dict[_] >= 0.01 else 0 for _ in dendrogram_sample_uid_order]
+        axes[2].imshow(np.array(cluster_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
         species_vals = []
         for sample_name in [self.sp_sample_uid_to_sample_name_dict[_] for _ in dendrogram_sample_uid_order]:
             host_species = self.sp_datasheet_df.at[sample_name, 'host_species']
@@ -722,17 +866,7 @@ class HierarchicalPlot(SchuppFigures):
                 species_vals.append(0.5)
             elif host_species == 'damicornis':
                 species_vals.append(1)
-        self.axes[2].imshow(np.array(species_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
+        axes[3].imshow(np.array(species_vals)[np.newaxis, :], cmap="plasma", aspect="auto")
+        return dendrogram_sample_uid_order
 
-        # post_med_absolute_values = [self.sample_uid_to_post_med_absolute[_] for _ in dendrogram_sample_uid_order]
-        # post_med_unique_values = [self.sample_uid_to_post_med_unique[_] for _ in dendrogram_sample_uid_order]
-        # self.axes[2].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-        # self.axes[3].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
-        # ex_absolute = [1000 if _ >= 200 else 0 for _ in post_med_absolute_values]
-        # ex_unique = [1000 if _ >= 10 else 0 for _ in post_med_unique_values]
-        # self.axes[4].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
-        # self.axes[5].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
-        foo = 'bar'
-
-
-HierarchicalPlot().plot()
+HierarchicalPlot().plot_supporting_histograms()
