@@ -48,6 +48,7 @@ import random
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import ListedColormap
+from matplotlib import cm
 from datetime import datetime
 DEGREE_SIGN = u'\N{DEGREE SIGN}'
 from sputils.spbars import SPBars
@@ -773,7 +774,7 @@ class HierarchicalPlot(SchuppFigures):
 
     def plot_supporting_histograms(self):
         # TODO it would make most sense to screen by relative abundance of the given clade in the sample
-        # as well as the absolute and uniqu so we should make a dict for that too
+        # as well as the absolute and unique so we should make a dict for that too
         fig = plt.figure(figsize=(10, 10))
         # 2 down 3 across
         gs = gridspec.GridSpec(2, 3)
@@ -785,67 +786,94 @@ class HierarchicalPlot(SchuppFigures):
 
         # D absolute
         d_post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-        d_abs_kde = stats.gaussian_kde(d_post_med_absolute_values)
+        # d_abs_kde = stats.gaussian_kde(d_post_med_absolute_values)
         d_abs_bins = range(0, 50000, int(50000 / 20))
-        d_abs_kde_x = np.linspace(0, 50000, 100)
-        axes[0].hist(d_post_med_absolute_values, bins=d_abs_bins, density=True)
-        axes[0].plot(d_abs_kde_x, d_abs_kde(d_abs_kde_x))
-        axes[0].set_title('Durusdinium: post-MED absolute sequences')
+        # d_abs_kde_x = np.linspace(0, 50000, 100)
+        axes[0].hist(d_post_med_absolute_values, bins=d_abs_bins)
+        # sec_ax = axes[0].twinx()
+        # sec_ax.plot(d_abs_kde_x, d_abs_kde(d_abs_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[0].set_ylabel('Count')
+        axes[0].set_title('$\it{Durusdinium}$\npost-MED absolute sequences')
         axes[0].set_xlabel('post-MED absolute sequences')
+
+
 
         # D unique
         d_post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-        d_unique_kde = stats.gaussian_kde(d_post_med_unique_values)
+        # d_unique_kde = stats.gaussian_kde(d_post_med_unique_values)
         d_unique_bins = range(0, 40, 2)
-        d_unique_kde_x = np.linspace(0, 40, 100)
-        axes[1].hist(d_post_med_unique_values, bins=d_unique_bins, density=True)
-        axes[1].plot(d_unique_kde_x, d_unique_kde(d_unique_kde_x))
-        axes[1].set_title('Durusdinium: post-MED unique sequences')
+        # d_unique_kde_x = np.linspace(0, 40, 100)
+        axes[1].hist(d_post_med_unique_values, bins=d_unique_bins)
+        # sec_ax = axes[1].twinx()
+        # sec_ax.plot(d_unique_kde_x, d_unique_kde(d_unique_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[1].set_ylabel('Count')
+        axes[1].set_title('$\it{Durusdinium}$\npost-MED unique sequences')
         axes[1].set_xlabel('post-MED unique sequences')
+        axes[1].ticklabel_format(useOffset=False, style='plain')
 
         # D relative
         d_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
                                     self.d_sample_uids_to_plot_non_filtered]
-        d_rel_kde = stats.gaussian_kde(d_relative_values)
+        # d_rel_kde = stats.gaussian_kde(d_relative_values)
         d_rel_bins = np.arange(0, 1, 1/20)
-        d_rel_kde_x = np.linspace(0, 1, 100)
-        axes[2].hist(d_relative_values, bins=d_rel_bins, density=True)
-        axes[2].plot(d_rel_kde_x, d_rel_kde(d_rel_kde_x))
-        axes[2].set_title('Durusdinium: relative abundance in sample')
+        # d_rel_kde_x = np.linspace(0, 1, 100)
+        axes[2].hist(d_relative_values, bins=d_rel_bins)
+        # sec_ax = axes[2].twinx()
+        # sec_ax.plot(d_rel_kde_x, d_rel_kde(d_rel_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[2].set_ylabel('Count')
+        axes[2].set_title('$\it{Durusdinium}$\nrelative abundance in sample')
         axes[2].set_xlabel('relative abundance in sample')
+
 
         # C absolute
         c_post_med_absolute_values = [self.c_sample_uid_to_post_med_absolute_dict[_] for _ in
                                         self.c_sample_uids_to_plot_non_filtered]
-        c_abs_kde = stats.gaussian_kde(c_post_med_absolute_values)
+        # c_abs_kde = stats.gaussian_kde(c_post_med_absolute_values)
         c_abs_bins = range(0, 50000, int(50000 / 20))
-        c_abs_kde_x = np.linspace(0, 50000, 100)
-        axes[3].hist(c_post_med_absolute_values, bins=c_abs_bins, density=True)
-        axes[3].plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x))
-        axes[3].set_title('Cladocopium: post-MED absolute sequences')
+        # c_abs_kde_x = np.linspace(0, 50000, 100)
+        axes[3].hist(c_post_med_absolute_values, bins=c_abs_bins)
+        # sec_ax = axes[3].twinx()
+        # sec_ax.plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[3].set_ylabel('Count')
+        axes[3].set_title('$\it{Cladocopium}$\npost-MED absolute sequences')
         axes[3].set_xlabel('post-MED absolute sequences')
+
 
         # C unique
         c_post_med_unique_values = [self.c_sample_uid_to_post_med_unique_dict[_] for _ in
                                   self.c_sample_uids_to_plot_non_filtered]
-        c_unique_kde = stats.gaussian_kde(c_post_med_unique_values)
+        # c_unique_kde = stats.gaussian_kde(c_post_med_unique_values)
         c_unique_bins = range(0, 40, 2)
-        c_unique_kde_x = np.linspace(0, 40, 100)
-        axes[4].hist(c_post_med_unique_values, bins=c_unique_bins, density=True)
-        axes[4].plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x))
-        axes[4].set_title('Cladocopium: post-MED unique sequences')
+        # c_unique_kde_x = np.linspace(0, 40, 100)
+        axes[4].hist(c_post_med_unique_values, bins=c_unique_bins)
+        # sec_ax = axes[4].twinx()
+        # sec_ax.plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[4].set_ylabel('Count')
+        axes[4].set_title('$\it{Cladocopium}$\npost-MED unique sequences')
         axes[4].set_xlabel('post-MED unique sequences')
+
 
         # C relative
         c_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
                              self.c_sample_uids_to_plot_non_filtered]
-        c_rel_kde = stats.gaussian_kde(c_relative_values)
+        # c_rel_kde = stats.gaussian_kde(c_relative_values)
         c_rel_bins = np.arange(0, 1, 1/20)
-        c_rel_kde_x = np.linspace(0, 1, 100)
-        axes[5].hist(c_relative_values, bins=c_rel_bins, density=True)
-        axes[5].plot(c_rel_kde_x, c_rel_kde(c_rel_kde_x))
-        axes[5].set_title('Cladocopium: relative abundance in sample')
+        # c_rel_kde_x = np.linspace(0, 1, 100)
+        axes[5].hist(c_relative_values, bins=c_rel_bins)
+        # sec_ax = axes[5].twinx()
+        # sec_ax.plot(c_rel_kde_x, c_rel_kde(c_rel_kde_x), color='black', zorder=2)
+        # sec_ax.set_ylabel('Density')
+        axes[5].set_ylabel('Count')
+        axes[5].set_title('$\it{Cladocopium}$\nrelative abundance in sample')
         axes[5].set_xlabel('relative abundance in sample')
+
+
+        plt.tight_layout()
 
         plt.savefig(os.path.join(self.root_dir, 'figures',
                                  f"sup_histograms_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
@@ -870,60 +898,107 @@ class HierarchicalPlot(SchuppFigures):
                 axes = [*self.axes[:4]]
                 dist_output_path = self.sp_between_smp_dist_path_d
                 clade_list = ['D']
-                d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
-                                     self.sample_uid_to_d2d_rel_abund_dict.items()}
+                # d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
+                #                      self.sample_uid_to_d2d_rel_abund_dict.items()}
                 self._plot_for_clade(
                     axes=axes, clade_list=clade_list,
                     dist_output_path=dist_output_path,
-                    sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=d_clustering_dict)
+                    sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=self.d_clustering_dict, cluster_c_map=self.d_cluster_c_map)
 
                 foo = 'bar'
                 post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-                self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                c_map = cm.get_cmap('plasma')
+                self.plot_categorical_bars(ax=self.axes[4], cat_list=post_med_absolute_values, c_map=c_map)
+                self.axes[4].set_xticks([])
+                self.axes[4].set_yticks([])
+                self.axes[4].set_ylabel('post-MED\nabsolute', fontsize='small')
+
                 ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
-                self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+                filter_color_dict = {1:'white', 0:'black'}
+                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_absolute, c_map=filter_color_dict)
+                self.axes[5].set_xticks([])
+                self.axes[5].set_yticks([])
+                self.axes[5].set_ylabel('post-MED\nabsolute', fontsize='small')
 
                 post_med_unique_values = [self.d_sample_uid_to_post_med_unique_dict[_] for _ in self.d_sample_uids_to_plot_non_filtered]
-                self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                c_map = cm.get_cmap('plasma')
+                self.plot_categorical_bars(ax=self.axes[6], cat_list=post_med_unique_values, c_map=c_map)
+                self.axes[6].set_xticks([])
+                self.axes[6].set_yticks([])
+                self.axes[6].set_ylabel('post-MED\nunique', fontsize='small')
+
                 ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
-                self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_unique, c_map=filter_color_dict)
+                self.axes[7].set_xticks([])
+                self.axes[7].set_yticks([])
+                self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
 
                 post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
                                           self.d_sample_uids_to_plot_non_filtered]
-                self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                c_map = cm.get_cmap('plasma')
+                self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
+                self.axes[8].set_xticks([])
+                self.axes[8].set_yticks([])
+                self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
                 ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
-                self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
+                self.axes[9].set_xticks([])
+                self.axes[9].set_yticks([])
+                self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
+
             elif clade == 'C':
                 axes = [*self.axes[:4]]
                 dist_output_path = self.sp_between_smp_dist_path_c
                 clade_list = ['C']
                 cluster_to_number_map = {'C1': 0, 'C50c': 0.25, 'C66': 0.5, 'other': 1}
-                c_clustering_dict = {uid: cluster_to_number_map[self.c_clustering_dict[uid]] for uid in
-                                     self.c_sample_uids_to_plot_non_filtered}
+                # c_clustering_dict = {uid: cluster_to_number_map[self.c_clustering_dict[uid]] for uid in
+                #                      self.c_sample_uids_to_plot_non_filtered}
                 self._plot_for_clade(
                     axes=axes, clade_list=clade_list,
                     dist_output_path=dist_output_path,
-                    sample_uids_to_plot=self.c_sample_uids_to_plot_non_filtered, cluster_dict=c_clustering_dict)
+                    sample_uids_to_plot=self.c_sample_uids_to_plot_non_filtered,
+                    cluster_dict=self.c_clustering_dict, cluster_c_map=self.c_cluster_c_map)
 
                 foo = 'bar'
+                c_map = cm.get_cmap('plasma')
+                filter_color_dict = {1: 'white', 0: 'black'}
                 post_med_absolute_values = [self.c_sample_uid_to_post_med_absolute_dict[_] for _ in
                                             self.c_sample_uids_to_plot_non_filtered]
-                self.axes[4].imshow(np.array(post_med_absolute_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[4], cat_list=post_med_absolute_values, c_map=c_map)
+                self.axes[4].set_xticks([])
+                self.axes[4].set_yticks([])
+                self.axes[4].set_ylabel('post-MED\nabsolute', fontsize='small')
                 ex_absolute = [1 if _ >= 5000 else 0 for _ in post_med_absolute_values]
-                self.axes[5].imshow(np.array(ex_absolute)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_absolute, c_map=filter_color_dict)
+                self.axes[5].set_xticks([])
+                self.axes[5].set_yticks([])
+                self.axes[5].set_ylabel('post-MED\nabsolute', fontsize='small')
 
                 post_med_unique_values = [self.c_sample_uid_to_post_med_unique_dict[_] for _ in
                                           self.c_sample_uids_to_plot_non_filtered]
-                self.axes[6].imshow(np.array(post_med_unique_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[6], cat_list=post_med_unique_values, c_map=c_map)
+                self.axes[6].set_xticks([])
+                self.axes[6].set_yticks([])
+                self.axes[6].set_ylabel('post-MED\nunique', fontsize='small')
                 ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
-                self.axes[7].imshow(np.array(ex_unique)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_unique, c_map=filter_color_dict)
+                self.axes[7].set_xticks([])
+                self.axes[7].set_yticks([])
+                self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
 
                 post_med_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
                                             self.c_sample_uids_to_plot_non_filtered]
-                self.axes[8].imshow(np.array(post_med_relative_values)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
+                self.axes[8].set_xticks([])
+                self.axes[8].set_yticks([])
+                self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
                 ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
-                self.axes[9].imshow(np.array(ex_relative)[np.newaxis, :], cmap="plasma", aspect="auto")
+                self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
+                self.axes[9].set_xticks([])
+                self.axes[9].set_yticks([])
+                self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
 
+            plt.tight_layout()
             print('saving svg')
             plt.savefig(os.path.join(self.root_dir, 'figures',
                                      f"supporting_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
@@ -1073,15 +1148,15 @@ class HierarchicalPlot(SchuppFigures):
         rect_list = []
         if type(c_map) == mpl.colors.ListedColormap:
             # normalise the cat_list
-            cat_list = np.array(cat_list)
+            cat_list = np.array(cat_list).reshape(-1, 1)
             min_max_scaler = MinMaxScaler()
             cat_list_norm = min_max_scaler.fit_transform(cat_list)
             # Working with a custom colour dict
-            for cat_item in cat_list:
+            for cat_item in cat_list_norm:
                 rect_list.append(Rectangle(
                     (left, 0),
                     1,
-                    1, color=c_map(cat_item)))
+                    1, color=c_map(cat_item[0])))
                 left += 1
         else:
             # Working with a colour dict
@@ -1367,4 +1442,5 @@ class ClusteredZooxs(SchuppFigures):
             raise RuntimeError(f'unexpected species {sp}')
         return sample_uids
 
-ClusteredZooxs(color_by_cluter=False).plot()
+HierarchicalPlot().plot_supporting_hierarcical_clustering_figure()
+# ClusteredZooxs(color_by_cluter=True).plot()
