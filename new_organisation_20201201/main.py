@@ -1001,11 +1001,11 @@ class HierarchicalPlot(SchuppFigures):
             plt.tight_layout()
             print('saving svg')
             plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"supporting_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                                     f"supp_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
                         dpi=1200)
             print('saving png')
             plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"supporting_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                                     f"supp_hierarchical_clade_{clade}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
                         dpi=1200)
             foo = 'bar'
 
@@ -1223,11 +1223,11 @@ class ClusteredZooxs(SchuppFigures):
         if self.color_by_cluster:
             print('saving svg')
             plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                                     f"supp_zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
                         dpi=1200)
             print('saving png')
             plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                                     f"supp_zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
                         dpi=1200)
         else:
             print('saving svg')
