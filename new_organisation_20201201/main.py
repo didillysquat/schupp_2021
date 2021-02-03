@@ -122,20 +122,22 @@ class SchuppFigures:
         # Create a dictionary that has the sample_uid to relative proportion of the sequence D2d which
         # we will use for the D clustering
         self.sample_uid_to_d2d_rel_abund_dict = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
-        self.sample_uid_to_c_cluster_dict = {}
+        self.d_clustering_dict = {(uid): ('D1/D2d' if rel_abund >= 0.01 else 'D1/D4') for uid, rel_abund in
+                             self.sample_uid_to_d2d_rel_abund_dict.items()}
+        self.c_clustering_dict = {}
         for sample_ind in self.sp_seq_rel_abund_df.index:
             # if C50c makes up more than 5% of the C seqs then class as 'C50c'
             c_seqs = self.sp_seq_rel_abund_df.loc[sample_ind][[_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith('C') or _.endswith('C'))]]
             if c_seqs.sum() > 0:
                 tot_c = c_seqs.sum()
                 if c_seqs.C50c / tot_c > 0.15:
-                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C50c'
+                    self.c_clustering_dict[sample_ind] = 'C50c'
                 elif c_seqs.C66 / tot_c > 0.15:
-                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C66'
+                    self.c_clustering_dict[sample_ind] = 'C66'
                 elif c_seqs.C1 / tot_c > 0.05:
-                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'C1'
+                    self.c_clustering_dict[sample_ind] = 'C1'
                 else:
-                    self.sample_uid_to_c_cluster_dict[sample_ind] = 'other'
+                    self.c_clustering_dict[sample_ind] = 'other'
 
         self.sp_profile_rel_abund_df = self.sp_profile_abs_abund_df.div(
             self.sp_profile_abs_abund_df.sum(axis=1), axis=0
@@ -154,6 +156,22 @@ class SchuppFigures:
         self.sp_seq_abs_abund_df = self.sp_seq_abs_abund_df.reindex(sorted_seq_index, axis=1)
         self.sp_profile_rel_abund_df = self.sp_profile_rel_abund_df.reindex(sorted_profile_index, axis=1)
         self.sp_profile_abs_abund_df = self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
+
+        # General colour maps
+        self.species_c_map = {'digitifera': '#D0CFD4', 'surculosa': '#89888D', 'purpurea': '#4A4A4C',
+                              'damicornis': '#F8F8F8'}
+        self.d_cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'other': '#F8F8F8'}
+        self.c_cluster_c_map = {'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'other': '#F8F8F8'}
+
+        # Get the colours of the seqs and profiles by doing a no plot bar
+        self.spb = SPBars(
+            seq_count_table_path=self.sp_seq_count_path,
+            profile_count_table_path=self.sp_profile_abund_and_meta_path,
+            plot_type='seq_only', orientation='v', legend=False, relative_abundance=True,
+            limit_genera=['C', 'D']
+        )
+        self.seq_color_dict = self.spb.seq_color_dict
+        self.profile_color_dict = self.spb.profile_color_dict
 
     def _get_name_and_uid_of_samples_to_plot(self):
         sample_names_list = []
@@ -708,15 +726,7 @@ class HierarchicalPlot(SchuppFigures):
     """
     def __init__(self):
         super().__init__()
-        # Get the colours of the seqs and profiles by doing a no plot bar
-        self.spb = SPBars(
-            seq_count_table_path=self.sp_seq_count_path,
-            profile_count_table_path=self.sp_profile_abund_and_meta_path,
-            plot_type='seq_only', orientation='v', legend=False, relative_abundance=True,
-            limit_genera=['C', 'D']
-        )
-        self.seq_color_dict = self.spb.seq_color_dict
-        self.profile_color_dict = self.spb.profile_color_dict
+
         # Get the D samples to plot
         self.d_sph_no_plot = SPHierarchical(dist_output_path=self.sp_between_smp_dist_path_d, no_plotting=True)
         self.d_sample_uids_in_dist = list(self.d_sph_no_plot.dist_df)
@@ -730,9 +740,7 @@ class HierarchicalPlot(SchuppFigures):
         self.c_sample_uids_to_plot_non_filtered = [_ for _ in self.c_sample_uids_in_dist if
                                                    _ in self.sp_sample_uids_of_study]
 
-        self.species_c_map = {'digitifera': '#D0CFD4', 'surculosa':'#89888D', 'purpurea':'#4A4A4C', 'damicornis':'#D4D5D0'}
-        self.d_cluster_c_map = {'D1/D2d': '#D0CFD4', 'D1/D4':'#8A8C82'}
-        self.c_cluster_c_map = {'C1': '#D0CFD4', 'C50c': '#89888D', 'C66': '#4A4A4C', 'other': '#D4D5D0'}
+
     def plot_supporting_histograms(self):
         # TODO it would make most sense to screen by relative abundance of the given clade in the sample
         # as well as the absolute and uniqu so we should make a dict for that too
@@ -860,7 +868,7 @@ class HierarchicalPlot(SchuppFigures):
                 dist_output_path = self.sp_between_smp_dist_path_c
                 clade_list = ['C']
                 cluster_to_number_map = {'C1': 0, 'C50c': 0.25, 'C66': 0.5, 'other': 1}
-                c_clustering_dict = {uid: cluster_to_number_map[self.sample_uid_to_c_cluster_dict[uid]] for uid in
+                c_clustering_dict = {uid: cluster_to_number_map[self.c_clustering_dict[uid]] for uid in
                                      self.c_sample_uids_to_plot_non_filtered}
                 self._plot_for_clade(
                     axes=axes, clade_list=clade_list,
@@ -948,11 +956,10 @@ class HierarchicalPlot(SchuppFigures):
         axes = [*self.axes[:4]]
         dist_output_path = self.sp_between_smp_dist_path_d
         clade_list = ['D']
-        d_clustering_dict = {(uid):('D1/D2d' if rel_abund >= 0.01 else 'D1/D4')  for uid, rel_abund in self.sample_uid_to_d2d_rel_abund_dict.items()}
         self._plot_for_clade(
             axes=axes, clade_list=clade_list,
             dist_output_path=dist_output_path,
-            sample_uids_to_plot=d_samples_to_plot, cluster_dict=d_clustering_dict, cluster_c_map=self.d_cluster_c_map)
+            sample_uids_to_plot=d_samples_to_plot, cluster_dict=self.d_clustering_dict, cluster_c_map=self.d_cluster_c_map)
 
 
         foo  ='bar'
@@ -965,12 +972,12 @@ class HierarchicalPlot(SchuppFigures):
         dist_output_path = self.sp_between_smp_dist_path_c
         clade_list = ['C']
 
-        c_clustering_dict = {uid: self.sample_uid_to_c_cluster_dict[uid] for uid in
-                             self.c_sample_uids_to_plot_non_filtered}
+        # c_clustering_dict = {uid: self.c_clustering_dict[uid] for uid in
+        #                      self.c_sample_uids_to_plot_non_filtered}
         self._plot_for_clade(
             axes=axes, clade_list=clade_list,
             dist_output_path=dist_output_path, sample_uids_to_plot=c_samples_to_plot,
-            cluster_dict=c_clustering_dict, cluster_c_map=self.c_cluster_c_map
+            cluster_dict=self.c_clustering_dict, cluster_c_map=self.c_cluster_c_map
         )
 
         foo = 'bar'
@@ -1059,5 +1066,251 @@ class HierarchicalPlot(SchuppFigures):
         ax.set_xlim(0, len(cat_list))
         ax.set_ylim(0, 1)
 
+class ClusteredZooxs(SchuppFigures):
+    def __init__(self, color_by_cluter=True):
+        """
+        The base for the main figure showing the zooxs results.
+        Four columns, one per species, and two rows, adults and recruits.
+        The recruits will be a matrix of time and temperature
 
-HierarchicalPlot().plot_main_hierarchical_clutering_figure()
+        If color_by_cluster is set to False then we will plot the full sequence colors
+        """
+        super().__init__()
+        self.color_by_cluster = color_by_cluter
+        self.species_full = [
+            'Acropora digitifera', 'Acropora hyacinthus', 'Pocillopora damicornis', 'Leptastrea purpurea'
+        ]
+        self.species_short = ['ad', 'ah', 'pd', 'lp']
+        self.species_short_to_full_dict = {
+            'ad': 'Acropora digitifera', 'ah': 'Acropora hyacinthus',
+            'pd': 'Pocillopora damicornis', 'lp': 'Leptastrea purpurea'
+        }
+        self.fig = plt.figure(figsize=(15, 3))
+        self.gs = gridspec.GridSpec(4, 4)
+        self.species_axes_dict = {}
+        for i, species in enumerate(self.species_short):
+            temp_list = []
+            # First the adult axis
+            temp_list.append(plt.subplot(self.gs[:1, i]))
+            # Then the recruit matrix
+            inner_grid_spec = self.gs[1:, i].subgridspec(3, 5)
+            outer_temp_list = []
+            for k in range(3):
+                inner_temp_list = []
+                for l in range(5):
+                    inner_temp_list.append(plt.subplot(inner_grid_spec[k, l]))
+                outer_temp_list.append(inner_temp_list)
+            temp_list.append(outer_temp_list)
+            self.species_axes_dict[species] = temp_list
+        foo = 'bar'
+
+    def plot(self):
+        for sp in self.species_short:
+            self._plot_adult_zooxs(sp=sp, ax=self.species_axes_dict[sp][0])
+        foo = 'bar'
+
+    def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df, sp):
+        # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
+        # We should be able to use the rectangle code that we made for the adults
+        # To input into that code we simply need a list of sample UIDs and an axis
+        for k, temp in enumerate([29, 30, 31]):
+            for l, age in enumerate([1, 3, 6, 9, 12]):
+                ax = ax_array[k][l]
+                # If left hand plot, set temp as y axis label
+                # If bottom plot, set time as x axis label
+                if l == 0 and k == 1 and sp == 'ad':
+                    ax.set_ylabel(f'Recruit Symbio.\nTemp.\n{temp}', fontsize='small')
+                elif l == 0 and sp == 'ad':
+                    ax.set_ylabel(f'{temp}', fontsize='small')
+                if k == 2 and l == 2:
+                    # We will try to put month in the middle
+                    ax.set_xlabel(f'{age}\nmonths')
+                elif k==2:
+                    ax.set_xlabel(f'{age}')
+                sample_uids = [
+                    self.sp_sample_name_to_sample_uid_dict[sample_name] for
+                    sample_name in
+                    working_datasheet_df[
+                        (working_datasheet_df['temp'] == temp) &
+                        (working_datasheet_df['age'] == age)
+                        ].index
+                ]
+                if sample_uids:
+                    self._rm_all_spines_and_ticks(ax)
+                    # Not all species have the zooxs data for the complete time/temp matrix
+                    self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
+                else:
+                    self._rm_all_spines_and_ticks(ax)
+
+    def _plot_recruit_zooxs(self, sp):
+        ax_array = self.recruit_zooxs_axes_dict[sp]
+        sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
+        # convert the ages to numeric by getting rid of the 'month' or 'months'
+        working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
+        working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
+        self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df, sp)
+
+    def _plot_adult_zooxs(self, sp, ax):
+        sample_uids = self._get_sample_uid_adult_zooxs(sp)
+        # Now we can plot up the seqs and profiles.
+        self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f'Adult\n{self.species_short_to_full_dict[sp]}', fontsize='small')
+
+    def _rm_all_spines_and_ticks(self, ax):
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.set_yticks([])
+        ax.set_xticks([])
+
+    def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
+        """"""
+        x_index_for_plot = 0
+        patches_list = []
+        if self.color_by_cluster:
+            # Then we want to plot color by cluster
+            # To do this, for each sample, look to see if there is C and or D in each sample
+            # Then for each of C and D, see if we can look them up in the respective
+            # cluster dict. If we can, then plot that colour else plot other color
+            for sample_uid in sample_uids:
+                bottom = 0
+                for g in ['D', 'C']:
+                    g_seqs = self.sp_seq_rel_abund_df.loc[
+                        sample_uid,
+                        [_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith(g) or _.endswith(g))]
+                    ]
+                    g_seqs_tot = g_seqs.sum()
+                    if g_seqs_tot > 0:
+                        # Then there are genus seqs in this sample
+                        if g == 'C':
+                            if sample_uid in self.c_clustering_dict:
+                                # Then we can assign a cluster
+                                color = self.c_cluster_c_map[self.c_clustering_dict[sample_uid]]
+                            else:
+                                # Assign the 'other' color for the genus
+                                color = self.c_cluster_c_map['other']
+                        else:
+                            if sample_uid in self.d_clustering_dict:
+                                # Then we can assign a cluster
+                                color = self.d_cluster_c_map[self.d_clustering_dict[sample_uid]]
+                            else:
+                                # Assign the 'other' color for the genus
+                                color = self.d_cluster_c_map['other']
+                        patches_list.append(Rectangle((x_index_for_plot,bottom), width=1, height=g_seqs_tot, color=color))
+                    bottom += g_seqs_tot
+                if x_index_for_plot != 0:
+                    ax.axvline(x_index_for_plot, zorder=2, color='black')
+                x_index_for_plot += 1
+
+                # we will also want to add vertical lines to denote the samples
+
+        else:
+            for sample_uid in sample_uids:
+                bottom = 0
+                non_zero_seq_abundances = self.sp_seq_rel_abund_df.loc[sample_uid][
+                    self.sp_seq_rel_abund_df.loc[sample_uid] > 0]
+                for seq_uid, rel_abund in non_zero_seq_abundances.iteritems():
+                    patches_list.append(Rectangle(
+                        (x_index_for_plot - 0.5, bottom),
+                        1,
+                        rel_abund, color=self.seq_color_dict[seq_uid]))
+                    bottom += rel_abund
+                x_index_for_plot += 1
+        patches_collection = PatchCollection(patches_list, match_original=True, zorder=1)
+        ax.add_collection(patches_collection)
+        ax.set_xlim(0, len(sample_uids))
+        ax.set_ylim(0, 1)
+
+    def _get_sample_uid_recruit_zooxs(self, sp):
+        if sp == 'ad':
+            # 1, 3, 6, 9, 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                    (self.sp_datasheet_df['host_species'] == 'digitifera') &
+                    (self.sp_datasheet_df['age'].str.contains("month")) &
+                    (~self.sp_datasheet_df['age'].str.contains("through")) &
+                    (~self.sp_datasheet_df['age'].str.contains("delayed"))
+                    ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'ah':
+            # 3, 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'surculosa') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'pd':
+            # 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'damicornis') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        elif sp == 'lp':
+            # 12
+            # 29, 30, 31
+            sample_names_index = self.sp_datasheet_df[
+                (self.sp_datasheet_df['host_species'] == 'purpurea') &
+                (self.sp_datasheet_df['age'].str.contains("month")) &
+                (~self.sp_datasheet_df['age'].str.contains("adult"))
+                ].index
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in sample_names_index
+            ]
+        else:
+            raise RuntimeError(f'unexpected species {sp}')
+        return sample_uids, sample_names_index
+
+    def _get_sample_uid_adult_zooxs(self, sp):
+        if sp == 'ad':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'digitifera')
+                    ].index
+            ]
+        elif sp == 'ah':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'surculosa')
+                    ].index
+            ]
+        elif sp == 'pd':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'damicornis')
+                    ].index
+            ]
+        elif sp == 'lp':
+            # NB there are multiple purpurea adult samples from different location
+            # I'm not sure which onces I should be working with
+            # For the time being I'll proceed with thos samples that were part of the same sequencing
+            # plate as the other adults
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'adult') &
+                    (self.sp_datasheet_df['host_species'] == 'purpurea')
+                    ].index if
+                "P4" in sample_name
+            ]
+        else:
+            raise RuntimeError(f'unexpected species {sp}')
+        return sample_uids
+
+
+ClusteredZooxs().plot()
