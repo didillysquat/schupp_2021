@@ -53,6 +53,10 @@ DEGREE_SIGN = u'\N{DEGREE SIGN}'
 from sputils.spbars import SPBars
 from sputils.sphierarchical import SPHierarchical
 from scipy import stats
+# from matplotlib import rc
+# # activate latex text rendering
+# # https://stackoverflow.com/questions/8376335/styling-part-of-label-in-legend-in-matplotlib
+# rc('text', usetex=True)
 
 
 class SchuppFigures:
@@ -173,6 +177,32 @@ class SchuppFigures:
         self.seq_color_dict = self.spb.seq_color_dict
         self.profile_color_dict = self.spb.profile_color_dict
 
+    def _plot_cluster_leg(self, ax):
+        """ Given an axis, plot a legend that contains the d and c clusterings"""
+        # We will assume that this is always going to be a wide axis and we will
+        # aim to plot just one row.
+        # there are 2 Ds, 3 Cs, and an other.
+        # so split into 6
+        ax.set_xlim(0, 6)
+        ax.set_ylim(0, 1)
+        cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'other': '#F8F8F8'}
+        rect_list = []
+        for i, cluster in enumerate(['C1', 'C50c', 'C66', 'D1/D2d', 'D1/D4', 'other']):
+            rect_list.append(Rectangle((i, 0.2), width=0.2, height=0.6, facecolor=cluster_c_map[cluster], edgecolor='black'))
+            ax.text(x=i + 0.25, y=0.6, s=f"'{cluster}-cluster'", ha='left', va='top')
+        collection = PatchCollection(rect_list, match_original=True)
+        ax.add_collection(collection)
+        self._rm_all_spines_and_ticks(ax)
+        ax.set_xlabel('ITS2 sequence clusters')
+
+    def _rm_all_spines_and_ticks(self, ax):
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.set_yticks([])
+        ax.set_xticks([])
+
     def _get_name_and_uid_of_samples_to_plot(self):
         sample_names_list = []
         # recruit ad
@@ -274,7 +304,7 @@ class SchuppFigures:
         self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.index.values, seq_count_df.sample_name))
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.index.values))
         index_of_first_seq = list(seq_count_df).index("A3")
-        seq_count_df = seq_count_df.iloc[:-1, index_of_first_seq:]
+        seq_count_df = seq_count_df.iloc[:, index_of_first_seq:]
         self.c_sample_uid_to_post_med_absolute_dict, self.c_sample_uid_to_post_med_unique_dict, self.c_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(clade='C', seq_count_df=seq_count_df)
         self.d_sample_uid_to_post_med_absolute_dict, self.d_sample_uid_to_post_med_unique_dict, self.d_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(
             clade='D', seq_count_df=seq_count_df)
@@ -1085,15 +1115,15 @@ class ClusteredZooxs(SchuppFigures):
             'ad': 'Acropora digitifera', 'ah': 'Acropora hyacinthus',
             'pd': 'Pocillopora damicornis', 'lp': 'Leptastrea purpurea'
         }
-        self.fig = plt.figure(figsize=(15, 3))
-        self.gs = gridspec.GridSpec(4, 4)
+        self.fig = plt.figure(figsize=(15, 5))
+        self.gs = gridspec.GridSpec(5, 4)
         self.species_axes_dict = {}
         for i, species in enumerate(self.species_short):
             temp_list = []
             # First the adult axis
             temp_list.append(plt.subplot(self.gs[:1, i]))
             # Then the recruit matrix
-            inner_grid_spec = self.gs[1:, i].subgridspec(3, 5)
+            inner_grid_spec = self.gs[1:4, i].subgridspec(3, 5)
             outer_temp_list = []
             for k in range(3):
                 inner_temp_list = []
@@ -1102,15 +1132,40 @@ class ClusteredZooxs(SchuppFigures):
                 outer_temp_list.append(inner_temp_list)
             temp_list.append(outer_temp_list)
             self.species_axes_dict[species] = temp_list
+        self.leg_ax = plt.subplot(self.gs[4:,:])
+        if self.color_by_cluster:
+            self._plot_cluster_leg(ax=self.leg_ax)
+        else:
+            self.spb.plot_only_legend(seq_leg_ax=self.leg_ax)
+            self.leg_ax.set_xlabel('Top 20 most abundant ITS2 sequences')
         foo = 'bar'
 
     def plot(self):
         for sp in self.species_short:
             self._plot_adult_zooxs(sp=sp, ax=self.species_axes_dict[sp][0])
-        foo = 'bar'
+            self._plot_recruit_zooxs(sp=sp, ax_array=self.species_axes_dict[sp][1])
+        plt.tight_layout()
+        if self.color_by_cluster:
+            print('saving svg')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                        dpi=1200)
+            print('saving png')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                        dpi=1200)
+        else:
+            print('saving svg')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"zooxs_base_figure_no_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                        dpi=1200)
+            print('saving png')
+            plt.savefig(os.path.join(self.root_dir, 'figures',
+                                     f"zooxs_base_figure_no_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                        dpi=1200)
 
     def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df, sp):
-        # Now we want to plot up the rectanges on a per temperature/time point combinations basis.
+        # Now we want to plot up the rectangles on a per temperature/time point combinations basis.
         # We should be able to use the rectangle code that we made for the adults
         # To input into that code we simply need a list of sample UIDs and an axis
         for k, temp in enumerate([29, 30, 31]):
@@ -1118,10 +1173,12 @@ class ClusteredZooxs(SchuppFigures):
                 ax = ax_array[k][l]
                 # If left hand plot, set temp as y axis label
                 # If bottom plot, set time as x axis label
+                if k ==0 and l == 2:
+                    ax.set_title('Recruit', fontsize='small')
                 if l == 0 and k == 1 and sp == 'ad':
-                    ax.set_ylabel(f'Recruit Symbio.\nTemp.\n{temp}', fontsize='small')
+                    ax.set_ylabel(f'Temperature\n{temp} {DEGREE_SIGN}C', fontsize='small')
                 elif l == 0 and sp == 'ad':
-                    ax.set_ylabel(f'{temp}', fontsize='small')
+                    ax.set_ylabel(f'{temp} {DEGREE_SIGN}C', fontsize='small')
                 if k == 2 and l == 2:
                     # We will try to put month in the middle
                     ax.set_xlabel(f'{age}\nmonths')
@@ -1136,17 +1193,17 @@ class ClusteredZooxs(SchuppFigures):
                         ].index
                 ]
                 if sample_uids:
-                    self._rm_all_spines_and_ticks(ax)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
                     # Not all species have the zooxs data for the complete time/temp matrix
                     self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
                 else:
                     self._rm_all_spines_and_ticks(ax)
 
-    def _plot_recruit_zooxs(self, sp):
-        ax_array = self.recruit_zooxs_axes_dict[sp]
+    def _plot_recruit_zooxs(self, sp, ax_array):
         sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
-        # convert the ages to numeric by getting rid of the 'month' or 'months'
         working_datasheet_df = self.sp_datasheet_df.loc[sample_names_index]
+        # convert the ages to numeric by getting rid of the 'month' or 'months'
         working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
         self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df, sp)
 
@@ -1156,15 +1213,7 @@ class ClusteredZooxs(SchuppFigures):
         self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title(f'Adult\n{self.species_short_to_full_dict[sp]}', fontsize='small')
-
-    def _rm_all_spines_and_ticks(self, ax):
-        ax.spines['top'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.set_yticks([])
-        ax.set_xticks([])
+        ax.set_title(f'$\it{self.species_short_to_full_dict[sp]}$\nAdult', fontsize='small')
 
     def _plot_seq_rectangles_adult_zooxs(self, ax, sample_uids):
         """"""
@@ -1202,27 +1251,33 @@ class ClusteredZooxs(SchuppFigures):
                         patches_list.append(Rectangle((x_index_for_plot,bottom), width=1, height=g_seqs_tot, color=color))
                     bottom += g_seqs_tot
                 if x_index_for_plot != 0:
-                    ax.axvline(x_index_for_plot, zorder=2, color='black')
+                    ax.axvline(x_index_for_plot, zorder=2, color='black', linewidth=0.5)
                 x_index_for_plot += 1
 
                 # we will also want to add vertical lines to denote the samples
-
+            patches_collection = PatchCollection(patches_list, match_original=True, zorder=1)
+            ax.add_collection(patches_collection)
+            ax.set_xlim(0, len(sample_uids))
+            ax.set_ylim(0, 1)
         else:
-            for sample_uid in sample_uids:
-                bottom = 0
-                non_zero_seq_abundances = self.sp_seq_rel_abund_df.loc[sample_uid][
-                    self.sp_seq_rel_abund_df.loc[sample_uid] > 0]
-                for seq_uid, rel_abund in non_zero_seq_abundances.iteritems():
-                    patches_list.append(Rectangle(
-                        (x_index_for_plot - 0.5, bottom),
-                        1,
-                        rel_abund, color=self.seq_color_dict[seq_uid]))
-                    bottom += rel_abund
-                x_index_for_plot += 1
-        patches_collection = PatchCollection(patches_list, match_original=True, zorder=1)
-        ax.add_collection(patches_collection)
-        ax.set_xlim(0, len(sample_uids))
-        ax.set_ylim(0, 1)
+            spb = self.spb = SPBars(
+            seq_count_table_path=self.sp_seq_count_path,
+            plot_type='seq_only', orientation='h', legend=False, relative_abundance=True,
+            limit_genera=['C', 'D'], sample_uids_included=sample_uids, bar_ax=ax, seq_color_dict=self.seq_color_dict
+            )
+            spb.plot()
+            # for sample_uid in sample_uids:
+            #     bottom = 0
+            #     non_zero_seq_abundances = self.sp_seq_rel_abund_df.loc[sample_uid][
+            #         self.sp_seq_rel_abund_df.loc[sample_uid] > 0]
+            #     for seq_uid, rel_abund in non_zero_seq_abundances.iteritems():
+            #         patches_list.append(Rectangle(
+            #             (x_index_for_plot - 0.5, bottom),
+            #             1,
+            #             rel_abund, color=self.seq_color_dict[seq_uid]))
+            #         bottom += rel_abund
+            #     x_index_for_plot += 1
+
 
     def _get_sample_uid_recruit_zooxs(self, sp):
         if sp == 'ad':
@@ -1312,5 +1367,4 @@ class ClusteredZooxs(SchuppFigures):
             raise RuntimeError(f'unexpected species {sp}')
         return sample_uids
 
-
-ClusteredZooxs().plot()
+ClusteredZooxs(color_by_cluter=False).plot()
