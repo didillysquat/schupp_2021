@@ -163,8 +163,8 @@ class SchuppFigures:
         self.sp_profile_abs_abund_df = self.sp_profile_abs_abund_df.reindex(sorted_profile_index, axis=1)
 
         # General colour maps
-        self.species_c_map = {'digitifera': '#D0CFD4', 'surculosa': '#89888D', 'purpurea': '#4A4A4C',
-                              'damicornis': '#F8F8F8'}
+        self.species_c_map = {'digitifera':'#F8F8F8', 'surculosa': '#D0CFD4', 'damicornis': '#89888D', 'purpurea': '#4A4A4C',
+                              }
         self.d_cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'other': '#F8F8F8'}
         self.c_cluster_c_map = {'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'other': '#F8F8F8'}
 
@@ -928,7 +928,7 @@ class HierarchicalPlot(SchuppFigures):
                 self.axes[6].set_ylabel('post-MED\nunique', fontsize='small')
 
                 ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
-                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_unique, c_map=filter_color_dict)
+                self.plot_categorical_bars(ax=self.axes[7], cat_list=ex_unique, c_map=filter_color_dict)
                 self.axes[7].set_xticks([])
                 self.axes[7].set_yticks([])
                 self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
@@ -981,7 +981,7 @@ class HierarchicalPlot(SchuppFigures):
                 self.axes[6].set_yticks([])
                 self.axes[6].set_ylabel('post-MED\nunique', fontsize='small')
                 ex_unique = [1 if _ >= 10 else 0 for _ in post_med_unique_values]
-                self.plot_categorical_bars(ax=self.axes[5], cat_list=ex_unique, c_map=filter_color_dict)
+                self.plot_categorical_bars(ax=self.axes[7], cat_list=ex_unique, c_map=filter_color_dict)
                 self.axes[7].set_xticks([])
                 self.axes[7].set_yticks([])
                 self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
@@ -1055,9 +1055,9 @@ class HierarchicalPlot(SchuppFigures):
         # Plot D
         d_samples_to_plot = [uid for uid in self.d_sample_uids_to_plot_non_filtered if (
                 (self.d_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
-                (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10) and
-                (self.d_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
+                (self.d_sample_uid_to_post_med_unique_dict[uid] >= 10)
         )]
+        print(f"{len(self.d_sample_uids_to_plot_non_filtered)-len(d_samples_to_plot)} D samples removed by filtering")
         axes = [*self.axes[:4]]
         dist_output_path = self.sp_between_smp_dist_path_d
         clade_list = ['D']
@@ -1070,9 +1070,9 @@ class HierarchicalPlot(SchuppFigures):
         foo  ='bar'
         c_samples_to_plot = [uid for uid in self.c_sample_uids_to_plot_non_filtered if (
                 (self.c_sample_uid_to_post_med_absolute_dict[uid] >= 5000) and
-                (self.c_sample_uid_to_post_med_unique_dict[uid] >= 10) and
-                (self.c_sample_uid_to_relative_genera_abund_dict[uid] >= 0.25)
+                (self.c_sample_uid_to_post_med_unique_dict[uid] >= 10)
         )]
+        print(f"{len(self.c_sample_uids_to_plot_non_filtered) - len(c_samples_to_plot)} C samples removed by filtering")
         axes = [*self.axes[4:]]
         dist_output_path = self.sp_between_smp_dist_path_c
         clade_list = ['C']
@@ -1172,7 +1172,7 @@ class HierarchicalPlot(SchuppFigures):
         ax.set_ylim(0, 1)
 
 class ClusteredZooxs(SchuppFigures):
-    def __init__(self, color_by_cluter=True):
+    def __init__(self, color_by_cluster=True):
         """
         The base for the main figure showing the zooxs results.
         Four columns, one per species, and two rows, adults and recruits.
@@ -1181,7 +1181,7 @@ class ClusteredZooxs(SchuppFigures):
         If color_by_cluster is set to False then we will plot the full sequence colors
         """
         super().__init__()
-        self.color_by_cluster = color_by_cluter
+        self.color_by_cluster = color_by_cluster
         self.species_full = [
             'Acropora digitifera', 'Acropora hyacinthus', 'Pocillopora damicornis', 'Leptastrea purpurea'
         ]
@@ -1273,7 +1273,12 @@ class ClusteredZooxs(SchuppFigures):
                     # Not all species have the zooxs data for the complete time/temp matrix
                     self._plot_seq_rectangles_adult_zooxs(ax=ax, sample_uids=sample_uids)
                 else:
-                    self._rm_all_spines_and_ticks(ax)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    ax.set_ylim(0, 1)
+                    ax.set_xlim(0, 1)
+                    ax.text(0.5, 0.5, 'no\nsamples', ha='center', va='center', fontsize='xx-small')
+
 
     def _plot_recruit_zooxs(self, sp, ax_array):
         sample_uids, sample_names_index = self._get_sample_uid_recruit_zooxs(sp)
@@ -1442,5 +1447,9 @@ class ClusteredZooxs(SchuppFigures):
             raise RuntimeError(f'unexpected species {sp}')
         return sample_uids
 
-HierarchicalPlot().plot_supporting_hierarcical_clustering_figure()
-# ClusteredZooxs(color_by_cluter=True).plot()
+h = HierarchicalPlot()
+h.plot_main_hierarchical_clutering_figure()
+# h.plot_supporting_hierarcical_clustering_figure()
+# h.plot_supporting_histograms()
+# ClusteredZooxs(color_by_cluster=False).plot()
+# ClusteredZooxs(color_by_cluster=True).plot()
