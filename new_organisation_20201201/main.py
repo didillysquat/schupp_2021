@@ -61,7 +61,7 @@ from scipy import stats
 
 
 class SchuppFigures:
-    def __init__(self):
+    def __init__(self, copy_number_norm=False):
         # Paths
         self.root_dir = os.path.abspath(os.path.dirname(__file__))
         self.sp_datasheet_path = os.path.join(self.root_dir, '20201018_schupp_all_data_datasheet.xlsx')
@@ -112,7 +112,7 @@ class SchuppFigures:
         # For the physiology data we will need a dataframe for survival and one for growth and fv_fm
         # This is because survival was assesed as a batch (i.e. 3 dead out of 5), while the growth and fv_fm
         # were done on a persample basis.
-
+        self.copy_number_norm = copy_number_norm
         fv_fm_size_data, survival_data = self._populate_data_holders()
         self.survival_df, self.fv_fm_size_df = self._make_survival_fv_fm_size_dfs(fv_fm_size_data, survival_data)
         self.sp_sample_uid_to_sample_name_dict = None
@@ -127,6 +127,25 @@ class SchuppFigures:
         # Create a dictionary that has the sample_uid to relative proportion of the sequence D2d which
         # we will use for the D clustering
         self.sample_uid_to_d2d_rel_abund_dict = dict(zip(self.sp_seq_rel_abund_df.index.values, self.sp_seq_rel_abund_df.D2d))
+        # Here we need to do a better job at woking out the maj A seqs in the samples
+        maj_a_count_dd = defaultdict(int)
+        maj_a_count_dd_1 = defaultdict(int)
+        species_a_count_dd = defaultdict(int)
+        species_a_count_dd_1 = defaultdict(int)
+        for ind in self.sp_seq_rel_abund_df.index:
+            ser_a = self.sp_seq_rel_abund_df.loc[ind, [_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith('A') or _.endswith('A'))]]
+            if ser_a.sum() > 0:
+                maj_a_count_dd[ser_a.idxmax()] += 1
+                species_a_count_dd[self.sp_datasheet_df.at[self.sp_sample_uid_to_sample_name_dict[ind], 'host_species']] += 1
+                if ser_a.sum() > 0.01:
+                    maj_a_count_dd_1[ser_a.idxmax()] += 1
+                    species_a_count_dd_1[
+                        self.sp_datasheet_df.at[self.sp_sample_uid_to_sample_name_dict[ind], 'host_species']] += 1
+        sum_a = sum(maj_a_count_dd.values())
+        sum_a_1 = sum(maj_a_count_dd_1.values())
+        a_cols = [_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith('A') or _.endswith('A'))]
+        self.a_clustering_dict = {uid: 'Symbiodinium' for uid in self.sp_seq_rel_abund_df.index if self.sp_seq_rel_abund_df.loc[uid, a_cols].sum() > 0}
+        foo = 'bar'
         self.d_clustering_dict = {(uid): ('D1/D2d' if rel_abund >= 0.01 else 'D1/D4') for uid, rel_abund in
                              self.sample_uid_to_d2d_rel_abund_dict.items()}
         self.c_clustering_dict = {}
@@ -167,13 +186,13 @@ class SchuppFigures:
                               }
         self.d_cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'other': '#F8F8F8'}
         self.c_cluster_c_map = {'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'other': '#F8F8F8'}
-
+        self.a_cluster_c_map = {'Symbiodinium': '#FF7F7F'}
         # Get the colours of the seqs and profiles by doing a no plot bar
         self.spb = SPBars(
             seq_count_table_path=self.sp_seq_count_path,
             profile_count_table_path=self.sp_profile_abund_and_meta_path,
             plot_type='seq_only', orientation='v', legend=False, relative_abundance=True,
-            limit_genera=['C', 'D']
+            limit_genera=['A', 'C', 'D']
         )
         self.seq_color_dict = self.spb.seq_color_dict
         self.profile_color_dict = self.spb.profile_color_dict
@@ -186,15 +205,23 @@ class SchuppFigures:
         # so split into 6
         ax.set_xlim(0, 6)
         ax.set_ylim(0, 1)
-        cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'other': '#F8F8F8'}
+        cluster_c_map = {'D1/D2d': '#104E8B', 'D1/D4': '#60AFFE', 'C1': '#308014', 'C50c': '#49E20E', 'C66': '#C5E3BF', 'Symbiodinium': '#FF7F7F', 'other': '#F8F8F8'}
         rect_list = []
-        for i, cluster in enumerate(['C1', 'C50c', 'C66', 'D1/D2d', 'D1/D4', 'other']):
-            rect_list.append(Rectangle((i, 0.2), width=0.2, height=0.6, facecolor=cluster_c_map[cluster], edgecolor='black'))
-            ax.text(x=i + 0.25, y=0.6, s=f"'{cluster}-cluster'", ha='left', va='top')
+        for i, cluster in enumerate(['Symbiodinium', 'C1', 'C50c', 'C66', 'D1/D2d', 'D1/D4', 'other']):
+            if cluster == 'Symbiodinium':
+                # italicize and no quotes
+                rect_list.append(
+                    Rectangle((i, 0.2), width=0.2, height=0.6, facecolor=cluster_c_map[cluster], edgecolor='black'))
+                ax.text(x=i + 0.25, y=0.6, s=f"$\it{cluster}$", ha='left', va='top')
+            else:
+                rect_list.append(Rectangle((i, 0.2), width=0.2, height=0.6, facecolor=cluster_c_map[cluster], edgecolor='black'))
+                ax.text(x=i + 0.25, y=0.6, s=f"'{cluster}'", ha='left', va='top')
         collection = PatchCollection(rect_list, match_original=True)
         ax.add_collection(collection)
+        ax.set_xlim(0, len(cluster_c_map))
+        ax.set_ylim(0, 1)
         self._rm_all_spines_and_ticks(ax)
-        ax.set_xlabel('ITS2 sequence clusters')
+        ax.set_xlabel('ITS2 assemblage categories')
 
     def _rm_all_spines_and_ticks(self, ax):
         ax.spines['top'].set_visible(False)
@@ -253,6 +280,17 @@ class SchuppFigures:
             ].index.values if
                               "P4" in _]
 
+        # larval pd
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['age'] == 'larvae') &
+                                      (self.sp_datasheet_df['host_species'] == 'damicornis')
+                                      ].index.values)
+        # larval lp
+        sample_names_list += [_ for _ in self.sp_datasheet_df[
+            (self.sp_datasheet_df['age'] == 'larvae') &
+            (self.sp_datasheet_df['host_species'] == 'purpurea')
+            ].index.values]
+
         return sample_names_list, [self.sp_sample_name_to_sample_uid_dict[_] for _ in sample_names_list]
 
     def _get_sp_dfs(self):
@@ -305,10 +343,17 @@ class SchuppFigures:
         self.sp_sample_uid_to_sample_name_dict = dict(zip(seq_count_df.index.values, seq_count_df.sample_name))
         self.sp_sample_name_to_sample_uid_dict = dict(zip(seq_count_df.sample_name, seq_count_df.index.values))
         index_of_first_seq = list(seq_count_df).index("A3")
+        self.seq_count_meta_df = seq_count_df.iloc[:,:index_of_first_seq]
+
         seq_count_df = seq_count_df.iloc[:, index_of_first_seq:]
         self.c_sample_uid_to_post_med_absolute_dict, self.c_sample_uid_to_post_med_unique_dict, self.c_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(clade='C', seq_count_df=seq_count_df)
         self.d_sample_uid_to_post_med_absolute_dict, self.d_sample_uid_to_post_med_unique_dict, self.d_sample_uid_to_relative_genera_abund_dict = self._make_clade_specific_post_med_absolute_and_unique_dicts(
             clade='D', seq_count_df=seq_count_df)
+        foo = 'bar'
+        if self.copy_number_norm:
+            for row_ind in seq_count_df.index:
+                seq_count_df.loc[row_ind] = [val * 5 if (col.startswith('D') or col.endswith('D')) else val for col, val in seq_count_df.loc[row_ind].items()]
+
         return seq_count_df
 
     def _make_clade_specific_post_med_absolute_and_unique_dicts(self, clade, seq_count_df):
@@ -1172,31 +1217,49 @@ class HierarchicalPlot(SchuppFigures):
         ax.set_ylim(0, 1)
 
 class ClusteredZooxs(SchuppFigures):
-    def __init__(self, color_by_cluster=True):
+    def __init__(self, color_by_cluster=True, copy_number_norm=False, plot_larvae=False, filter_low=True):
         """
         The base for the main figure showing the zooxs results.
         Four columns, one per species, and two rows, adults and recruits.
         The recruits will be a matrix of time and temperature
 
         If color_by_cluster is set to False then we will plot the full sequence colors
+
+        If copy_number_norm is True, then we will normalise for the difference in ITS2 copy number between
+        D and C using a factor of 5. We will multiply D occurences by 5.
+
+        If plot_larvae is True, then an additional row of plot will be place at the bottom of the figure
+
+        if filter_low, then an abosulte post-MED of 200 is required on a sample basis.
         """
-        super().__init__()
+        super().__init__(copy_number_norm)
+        self.filter_low = filter_low
+        self.plot_larvae = plot_larvae
         self.color_by_cluster = color_by_cluster
+        self.copy_number_norm = copy_number_norm
         self.species_full = [
             'Acropora digitifera', 'Acropora hyacinthus', 'Pocillopora damicornis', 'Leptastrea purpurea'
         ]
         self.species_short = ['ad', 'ah', 'pd', 'lp']
         self.species_short_to_full_dict = {
-            'ad': 'Acropora digitifera', 'ah': 'Acropora hyacinthus',
-            'pd': 'Pocillopora damicornis', 'lp': 'Leptastrea purpurea'
+            'ad': 'Acropora  digitifera', 'ah': 'Acropora  hyacinthus',
+            'pd': 'Pocillopora  damicornis', 'lp': 'Leptastrea  purpurea'
         }
-        self.fig = plt.figure(figsize=(15, 5))
-        self.gs = gridspec.GridSpec(5, 4)
+        if self.plot_larvae:
+            self.fig = plt.figure(figsize=(15, 8))
+        else:
+            self.fig = plt.figure(figsize=(15, 5))
+        if self.plot_larvae:
+            self.gs = gridspec.GridSpec(6, 4)
+        else:
+            self.gs = gridspec.GridSpec(5, 4)
         self.species_axes_dict = {}
         for i, species in enumerate(self.species_short):
             temp_list = []
+
             # First the adult axis
             temp_list.append(plt.subplot(self.gs[:1, i]))
+
             # Then the recruit matrix
             inner_grid_spec = self.gs[1:4, i].subgridspec(3, 5)
             outer_temp_list = []
@@ -1206,8 +1269,14 @@ class ClusteredZooxs(SchuppFigures):
                     inner_temp_list.append(plt.subplot(inner_grid_spec[k, l]))
                 outer_temp_list.append(inner_temp_list)
             temp_list.append(outer_temp_list)
+            if self.plot_larvae:
+                # Then the larvae
+                temp_list.append(plt.subplot(self.gs[4:5, i]))
             self.species_axes_dict[species] = temp_list
-        self.leg_ax = plt.subplot(self.gs[4:,:])
+        if self.plot_larvae:
+            self.leg_ax = plt.subplot(self.gs[5:6, :])
+        else:
+            self.leg_ax = plt.subplot(self.gs[4:5, :])
         if self.color_by_cluster:
             self._plot_cluster_leg(ax=self.leg_ax)
         else:
@@ -1217,27 +1286,47 @@ class ClusteredZooxs(SchuppFigures):
 
     def plot(self):
         for sp in self.species_short:
+            if self.plot_larvae:
+                self._plot_larvae_zooxs(sp=sp, ax=self.species_axes_dict[sp][2])
+        for sp in self.species_short:
             self._plot_adult_zooxs(sp=sp, ax=self.species_axes_dict[sp][0])
+
             self._plot_recruit_zooxs(sp=sp, ax_array=self.species_axes_dict[sp][1])
+
         plt.tight_layout()
         if self.color_by_cluster:
-            print('saving svg')
-            plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"supp_zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
-                        dpi=1200)
-            print('saving png')
-            plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"supp_zooxs_base_figure_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
-                        dpi=1200)
+            cluster_string = "cluster"
+            if self.copy_number_norm:
+                supp_string = "supp_"
+                norm_string = "normalised_"
+            else:
+                supp_string = ""
+                norm_string = ""
         else:
-            print('saving svg')
-            plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"zooxs_base_figure_no_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
-                        dpi=1200)
-            print('saving png')
-            plt.savefig(os.path.join(self.root_dir, 'figures',
-                                     f"zooxs_base_figure_no_cluster_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
-                        dpi=1200)
+            cluster_string = "no_cluster"
+            if self.copy_number_norm:
+                supp_string = "supp_"
+                norm_string = "normalised_"
+            else:
+                supp_string = "supp_"
+                norm_string = ""
+        if self.plot_larvae:
+            larvae_string = 'w_larvae_'
+        else:
+            larvae_string = ""
+        if self.filter_low:
+            filter_string = 'filtered'
+        else:
+            filter_string = 'no_filter'
+
+        print('saving svg')
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"{supp_string}zooxs_base_figure_{cluster_string}_{norm_string}{larvae_string}_{filter_string}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.svg"),
+                    dpi=1200)
+        print('saving png')
+        plt.savefig(os.path.join(self.root_dir, 'figures',
+                                 f"{supp_string}zooxs_base_figure_{cluster_string}_{norm_string}{larvae_string}_{filter_string}_{str(datetime.now()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')}.png"),
+                    dpi=1200)
 
     def _plot_temp_time_recruit_zooxs_matrix(self, ax_array, working_datasheet_df, sp):
         # Now we want to plot up the rectangles on a per temperature/time point combinations basis.
@@ -1245,6 +1334,8 @@ class ClusteredZooxs(SchuppFigures):
         # To input into that code we simply need a list of sample UIDs and an axis
         for k, temp in enumerate([29, 30, 31]):
             for l, age in enumerate([1, 3, 6, 9, 12]):
+                if sp=='ad' and temp == 30 and age == 1:
+                    foo = 'bar'
                 ax = ax_array[k][l]
                 # If left hand plot, set temp as y axis label
                 # If bottom plot, set time as x axis label
@@ -1287,6 +1378,17 @@ class ClusteredZooxs(SchuppFigures):
         working_datasheet_df['age'] = [int(v.split(' ')[0]) for k, v in working_datasheet_df['age'].iteritems()]
         self._plot_temp_time_recruit_zooxs_matrix(ax_array, working_datasheet_df, sp)
 
+    def _plot_larvae_zooxs(self, sp, ax):
+        sample_uids = self._get_sample_uid_larvae_zooxs(sp)
+        # Now we can plot up the seqs and profiles.
+        if sample_uids:
+            self._plot_seq_rectangles_adult_zooxs(ax, sample_uids)
+        else:
+            ax.text(0.5, 0.5, s='no\nsamples', fontsize='small', ha='center', va='center')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f'$\it{self.species_short_to_full_dict[sp]}$\nLarvae', fontsize='small')
+
     def _plot_adult_zooxs(self, sp, ax):
         sample_uids = self._get_sample_uid_adult_zooxs(sp)
         # Now we can plot up the seqs and profiles.
@@ -1305,8 +1407,13 @@ class ClusteredZooxs(SchuppFigures):
             # Then for each of C and D, see if we can look them up in the respective
             # cluster dict. If we can, then plot that colour else plot other color
             for sample_uid in sample_uids:
+                if sample_uid == 109812:
+                    foo = 'bar'
+                if self.filter_low:
+                    if self.seq_count_meta_df.at[sample_uid, 'post_med_absolute'] < 100:
+                        continue
                 bottom = 0
-                for g in ['D', 'C']:
+                for g in ['A', 'D', 'C']:
                     g_seqs = self.sp_seq_rel_abund_df.loc[
                         sample_uid,
                         [_ for _ in list(self.sp_seq_rel_abund_df) if (_.startswith(g) or _.endswith(g))]
@@ -1321,10 +1428,18 @@ class ClusteredZooxs(SchuppFigures):
                             else:
                                 # Assign the 'other' color for the genus
                                 color = self.c_cluster_c_map['other']
-                        else:
+                        elif g == 'D':
                             if sample_uid in self.d_clustering_dict:
                                 # Then we can assign a cluster
                                 color = self.d_cluster_c_map[self.d_clustering_dict[sample_uid]]
+                            else:
+                                # Assign the 'other' color for the genus
+                                color = self.d_cluster_c_map['other']
+                        else:
+                            # g == 'A'
+                            if sample_uid in self.a_clustering_dict:
+                                # Then we can assign a cluster
+                                color = self.a_cluster_c_map[self.a_clustering_dict[sample_uid]]
                             else:
                                 # Assign the 'other' color for the genus
                                 color = self.d_cluster_c_map['other']
@@ -1337,13 +1452,13 @@ class ClusteredZooxs(SchuppFigures):
                 # we will also want to add vertical lines to denote the samples
             patches_collection = PatchCollection(patches_list, match_original=True, zorder=1)
             ax.add_collection(patches_collection)
-            ax.set_xlim(0, len(sample_uids))
+            ax.set_xlim(0, x_index_for_plot)
             ax.set_ylim(0, 1)
         else:
             spb = self.spb = SPBars(
             seq_count_table_path=self.sp_seq_count_path,
             plot_type='seq_only', orientation='h', legend=False, relative_abundance=True,
-            limit_genera=['C', 'D'], sample_uids_included=sample_uids, bar_ax=ax, seq_color_dict=self.seq_color_dict
+            limit_genera=['A', 'C', 'D'], sample_uids_included=sample_uids, bar_ax=ax, seq_color_dict=self.seq_color_dict
             )
             spb.plot()
             # for sample_uid in sample_uids:
@@ -1409,6 +1524,43 @@ class ClusteredZooxs(SchuppFigures):
             raise RuntimeError(f'unexpected species {sp}')
         return sample_uids, sample_names_index
 
+    def _get_sample_uid_larvae_zooxs(self, sp):
+        if sp == 'ad':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'larvae') &
+                    (self.sp_datasheet_df['host_species'] == 'digitifera')
+                    ].index
+            ]
+        elif sp == 'ah':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'larvae') &
+                    (self.sp_datasheet_df['host_species'] == 'surculosa')
+                    ].index
+            ]
+        elif sp == 'pd':
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'larvae') &
+                    (self.sp_datasheet_df['host_species'] == 'damicornis')
+                    ].index
+            ]
+        elif sp == 'lp':
+            # NB there are multiple purpurea adult samples from different location
+            # I'm not sure which onces I should be working with
+            # For the time being I'll proceed with thos samples that were part of the same sequencing
+            # plate as the other adults
+            sample_uids = [
+                self.sp_sample_name_to_sample_uid_dict[sample_name] for sample_name in self.sp_datasheet_df[
+                    (self.sp_datasheet_df['age'] == 'larvae') &
+                    (self.sp_datasheet_df['host_species'] == 'purpurea')
+                    ].index
+            ]
+        else:
+            raise RuntimeError(f'unexpected species {sp}')
+        return sample_uids
+
     def _get_sample_uid_adult_zooxs(self, sp):
         if sp == 'ad':
             sample_uids = [
@@ -1448,8 +1600,12 @@ class ClusteredZooxs(SchuppFigures):
         return sample_uids
 
 h = HierarchicalPlot()
-h.plot_main_hierarchical_clutering_figure()
-# h.plot_supporting_hierarcical_clustering_figure()
+# h.plot_main_hierarchical_clutering_figure()
+h.plot_supporting_hierarcical_clustering_figure()
 # h.plot_supporting_histograms()
-# ClusteredZooxs(color_by_cluster=False).plot()
-# ClusteredZooxs(color_by_cluster=True).plot()
+# ClusteredZooxs(color_by_cluster=False, copy_number_norm=False).plot()
+# ClusteredZooxs(color_by_cluster=True, copy_number_norm=False).plot()
+# ClusteredZooxs(color_by_cluster=True, copy_number_norm=True).plot()
+# ClusteredZooxs(color_by_cluster=False, copy_number_norm=True).plot()
+ClusteredZooxs(color_by_cluster=False, copy_number_norm=False, plot_larvae=True, filter_low=False).plot()
+
