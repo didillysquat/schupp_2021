@@ -291,6 +291,14 @@ class SchuppFigures:
             (self.sp_datasheet_df['host_species'] == 'purpurea')
             ].index.values]
 
+        # delayed ad
+        sample_names_list += list(self.sp_datasheet_df[
+                                      (self.sp_datasheet_df['host_species'] == 'digitifera') &
+                                      (self.sp_datasheet_df['age'].str.contains("month")) &
+                                      (~self.sp_datasheet_df['age'].str.contains("through")) &
+                                      (self.sp_datasheet_df['age'].str.contains("delayed"))
+                                      ].index.values)
+
         return sample_names_list, [self.sp_sample_name_to_sample_uid_dict[_] for _ in sample_names_list]
 
     def _get_sp_dfs(self):
@@ -822,9 +830,9 @@ class HierarchicalPlot(SchuppFigures):
         # as well as the absolute and unique so we should make a dict for that too
         fig = plt.figure(figsize=(10, 10))
         # 2 down 3 across
-        gs = gridspec.GridSpec(2, 3)
+        gs = gridspec.GridSpec(2, 2)
         axes = []
-        plot_tyes = ['post_med_absolute', 'post_med_unique', 'relative']
+        plot_tyes = ['post_med_absolute', 'post_med_unique']
         for i, genus in enumerate(['C', 'D']):
             for j, plot_type in enumerate(plot_tyes):
                 axes.append(plt.subplot(gs[i:i+1, j:j+1]))
@@ -858,19 +866,19 @@ class HierarchicalPlot(SchuppFigures):
         axes[1].set_xlabel('post-MED unique sequences')
         axes[1].ticklabel_format(useOffset=False, style='plain')
 
-        # D relative
-        d_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
-                                    self.d_sample_uids_to_plot_non_filtered]
-        # d_rel_kde = stats.gaussian_kde(d_relative_values)
-        d_rel_bins = np.arange(0, 1, 1/20)
-        # d_rel_kde_x = np.linspace(0, 1, 100)
-        axes[2].hist(d_relative_values, bins=d_rel_bins)
-        # sec_ax = axes[2].twinx()
-        # sec_ax.plot(d_rel_kde_x, d_rel_kde(d_rel_kde_x), color='black', zorder=2)
-        # sec_ax.set_ylabel('Density')
-        axes[2].set_ylabel('Count')
-        axes[2].set_title('$\it{Durusdinium}$\nrelative abundance in sample')
-        axes[2].set_xlabel('relative abundance in sample')
+        # # D relative
+        # d_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
+        #                             self.d_sample_uids_to_plot_non_filtered]
+        # # d_rel_kde = stats.gaussian_kde(d_relative_values)
+        # d_rel_bins = np.arange(0, 1, 1/20)
+        # # d_rel_kde_x = np.linspace(0, 1, 100)
+        # axes[2].hist(d_relative_values, bins=d_rel_bins)
+        # # sec_ax = axes[2].twinx()
+        # # sec_ax.plot(d_rel_kde_x, d_rel_kde(d_rel_kde_x), color='black', zorder=2)
+        # # sec_ax.set_ylabel('Density')
+        # axes[2].set_ylabel('Count')
+        # axes[2].set_title('$\it{Durusdinium}$\nrelative abundance in sample')
+        # axes[2].set_xlabel('relative abundance in sample')
 
 
         # C absolute
@@ -879,13 +887,13 @@ class HierarchicalPlot(SchuppFigures):
         # c_abs_kde = stats.gaussian_kde(c_post_med_absolute_values)
         c_abs_bins = range(0, 50000, int(50000 / 20))
         # c_abs_kde_x = np.linspace(0, 50000, 100)
-        axes[3].hist(c_post_med_absolute_values, bins=c_abs_bins)
+        axes[2].hist(c_post_med_absolute_values, bins=c_abs_bins)
         # sec_ax = axes[3].twinx()
         # sec_ax.plot(c_abs_kde_x, c_abs_kde(c_abs_kde_x), color='black', zorder=2)
         # sec_ax.set_ylabel('Density')
-        axes[3].set_ylabel('Count')
-        axes[3].set_title('$\it{Cladocopium}$\npost-MED absolute sequences')
-        axes[3].set_xlabel('post-MED absolute sequences')
+        axes[2].set_ylabel('Count')
+        axes[2].set_title('$\it{Cladocopium}$\npost-MED absolute sequences')
+        axes[2].set_xlabel('post-MED absolute sequences')
 
 
         # C unique
@@ -894,28 +902,28 @@ class HierarchicalPlot(SchuppFigures):
         # c_unique_kde = stats.gaussian_kde(c_post_med_unique_values)
         c_unique_bins = range(0, 40, 2)
         # c_unique_kde_x = np.linspace(0, 40, 100)
-        axes[4].hist(c_post_med_unique_values, bins=c_unique_bins)
+        axes[3].hist(c_post_med_unique_values, bins=c_unique_bins)
         # sec_ax = axes[4].twinx()
         # sec_ax.plot(c_unique_kde_x, c_unique_kde(c_unique_kde_x), color='black', zorder=2)
         # sec_ax.set_ylabel('Density')
-        axes[4].set_ylabel('Count')
-        axes[4].set_title('$\it{Cladocopium}$\npost-MED unique sequences')
-        axes[4].set_xlabel('post-MED unique sequences')
+        axes[3].set_ylabel('Count')
+        axes[3].set_title('$\it{Cladocopium}$\npost-MED unique sequences')
+        axes[3].set_xlabel('post-MED unique sequences')
 
 
-        # C relative
-        c_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
-                             self.c_sample_uids_to_plot_non_filtered]
-        # c_rel_kde = stats.gaussian_kde(c_relative_values)
-        c_rel_bins = np.arange(0, 1, 1/20)
-        # c_rel_kde_x = np.linspace(0, 1, 100)
-        axes[5].hist(c_relative_values, bins=c_rel_bins)
-        # sec_ax = axes[5].twinx()
-        # sec_ax.plot(c_rel_kde_x, c_rel_kde(c_rel_kde_x), color='black', zorder=2)
-        # sec_ax.set_ylabel('Density')
-        axes[5].set_ylabel('Count')
-        axes[5].set_title('$\it{Cladocopium}$\nrelative abundance in sample')
-        axes[5].set_xlabel('relative abundance in sample')
+        # # C relative
+        # c_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
+        #                      self.c_sample_uids_to_plot_non_filtered]
+        # # c_rel_kde = stats.gaussian_kde(c_relative_values)
+        # c_rel_bins = np.arange(0, 1, 1/20)
+        # # c_rel_kde_x = np.linspace(0, 1, 100)
+        # axes[5].hist(c_relative_values, bins=c_rel_bins)
+        # # sec_ax = axes[5].twinx()
+        # # sec_ax.plot(c_rel_kde_x, c_rel_kde(c_rel_kde_x), color='black', zorder=2)
+        # # sec_ax.set_ylabel('Density')
+        # axes[5].set_ylabel('Count')
+        # axes[5].set_title('$\it{Cladocopium}$\nrelative abundance in sample')
+        # axes[5].set_xlabel('relative abundance in sample')
 
 
         plt.tight_layout()
@@ -1218,7 +1226,7 @@ class HierarchicalPlot(SchuppFigures):
         ax.set_ylim(0, 1)
 
 class ClusteredZooxs(SchuppFigures):
-    def __init__(self, color_by_cluster=True, copy_number_norm=False, plot_larvae=False, filter_low=True):
+    def __init__(self, color_by_cluster=True, copy_number_norm=False, plot_additional=True, filter_low=True):
         """
         The base for the main figure showing the zooxs results.
         Four columns, one per species, and two rows, adults and recruits.
@@ -1229,13 +1237,15 @@ class ClusteredZooxs(SchuppFigures):
         If copy_number_norm is True, then we will normalise for the difference in ITS2 copy number between
         D and C using a factor of 5. We will multiply D occurences by 5.
 
-        If plot_larvae is True, then an additional row of plot will be place at the bottom of the figure
+        If plot_additional is True, then an additional row of plot will be place at the bottom of the figure
+        for the brooders it will contain the larvae
+        for the acropora it will contain the delayed.
 
         if filter_low, then an abosulte post-MED of 200 is required on a sample basis.
         """
         super().__init__(copy_number_norm)
         self.filter_low = filter_low
-        self.plot_larvae = plot_larvae
+        self.plot_additional = plot_additional
         self.color_by_cluster = color_by_cluster
         self.copy_number_norm = copy_number_norm
         self.species_full = [
@@ -1246,11 +1256,11 @@ class ClusteredZooxs(SchuppFigures):
             'ad': 'Acropora  digitifera', 'ah': 'Acropora  hyacinthus',
             'pd': 'Pocillopora  damicornis', 'lp': 'Leptastrea  purpurea'
         }
-        if self.plot_larvae:
+        if self.plot_additional:
             self.fig = plt.figure(figsize=(15, 8))
         else:
             self.fig = plt.figure(figsize=(15, 5))
-        if self.plot_larvae:
+        if self.plot_additional:
             self.gs = gridspec.GridSpec(6, 4)
         else:
             self.gs = gridspec.GridSpec(5, 4)
@@ -1270,11 +1280,11 @@ class ClusteredZooxs(SchuppFigures):
                     inner_temp_list.append(plt.subplot(inner_grid_spec[k, l]))
                 outer_temp_list.append(inner_temp_list)
             temp_list.append(outer_temp_list)
-            if self.plot_larvae:
+            if self.plot_additional:
                 # Then the larvae
                 temp_list.append(plt.subplot(self.gs[4:5, i]))
             self.species_axes_dict[species] = temp_list
-        if self.plot_larvae:
+        if self.plot_additional:
             self.leg_ax = plt.subplot(self.gs[5:6, :])
         else:
             self.leg_ax = plt.subplot(self.gs[4:5, :])
@@ -1287,7 +1297,7 @@ class ClusteredZooxs(SchuppFigures):
 
     def plot(self):
         for sp in self.species_short:
-            if self.plot_larvae:
+            if self.plot_additional:
                 self._plot_larvae_zooxs(sp=sp, ax=self.species_axes_dict[sp][2])
         for sp in self.species_short:
             self._plot_adult_zooxs(sp=sp, ax=self.species_axes_dict[sp][0])
@@ -1311,7 +1321,7 @@ class ClusteredZooxs(SchuppFigures):
             else:
                 supp_string = "supp_"
                 norm_string = ""
-        if self.plot_larvae:
+        if self.plot_additional:
             larvae_string = 'w_larvae_'
         else:
             larvae_string = ""
@@ -1603,10 +1613,10 @@ class ClusteredZooxs(SchuppFigures):
         return sample_uids
 
 h = HierarchicalPlot()
-# h.plot_main_hierarchical_clutering_figure()
+h.plot_main_hierarchical_clutering_figure()
 h.plot_supporting_hierarcical_clustering_figure()
-# h.plot_supporting_histograms()
-# ClusteredZooxs(color_by_cluster=False, copy_number_norm=False).plot()
+h.plot_supporting_histograms()
+# ClusteredZooxs(color_by_cluster=True, copy_number_norm=False, plot_additional=True, filter_low=True).plot()
 # ClusteredZooxs(color_by_cluster=True, copy_number_norm=False).plot()
 # ClusteredZooxs(color_by_cluster=True, copy_number_norm=True).plot()
 # ClusteredZooxs(color_by_cluster=False, copy_number_norm=True).plot()
