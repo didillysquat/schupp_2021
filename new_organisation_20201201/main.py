@@ -932,9 +932,9 @@ class HierarchicalPlot(SchuppFigures):
             self.fig = plt.figure(figsize=(10, 10))
             # 8 down 1 across
             # TODO we will need to adjust this as we refine the figure
-            self.gs = gridspec.GridSpec(10, 1)
+            self.gs = gridspec.GridSpec(9, 1)
             self.axes = []
-            plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species', 'absolute', 'unique', 'relative', 'absolute_bin', 'unique_bin', 'relative_bin']
+            plot_tyes = ['hierarchical', 'seq_prof', 'cluster', 'species', 'absolute', 'unique', 'absolute_bin', 'unique_bin', 'legend']
 
             for j, plot_type in enumerate(plot_tyes):
                 self.axes.append(plt.subplot(self.gs[j: j + 1, :]))
@@ -945,11 +945,11 @@ class HierarchicalPlot(SchuppFigures):
                 clade_list = ['D']
                 # d_clustering_dict = {(uid): (1 if rel_abund >= 0.01 else 0) for uid, rel_abund in
                 #                      self.sample_uid_to_d2d_rel_abund_dict.items()}
-                dendrogram_sample_uid_order = self._plot_for_clade(
+                dendrogram_sample_uid_order, spb = self._plot_for_clade(
                     axes=axes, clade_list=clade_list,
                     dist_output_path=dist_output_path,
                     sample_uids_to_plot=self.d_sample_uids_to_plot_non_filtered, cluster_dict=self.d_clustering_dict, cluster_c_map=self.d_cluster_c_map)
-
+                spb.plot_only_legend(seq_leg_ax=self.axes[-1])
                 foo = 'bar'
                 post_med_absolute_values = [self.d_sample_uid_to_post_med_absolute_dict[_] for _ in dendrogram_sample_uid_order]
                 c_map = cm.get_cmap('plasma')
@@ -978,18 +978,18 @@ class HierarchicalPlot(SchuppFigures):
                 self.axes[7].set_yticks([])
                 self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
 
-                post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
-                                          dendrogram_sample_uid_order]
-                c_map = cm.get_cmap('plasma')
-                self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
-                self.axes[8].set_xticks([])
-                self.axes[8].set_yticks([])
-                self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
-                ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
-                self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
-                self.axes[9].set_xticks([])
-                self.axes[9].set_yticks([])
-                self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
+                # post_med_relative_values = [self.d_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                #                           dendrogram_sample_uid_order]
+                # c_map = cm.get_cmap('plasma')
+                # self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
+                # self.axes[8].set_xticks([])
+                # self.axes[8].set_yticks([])
+                # self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
+                # ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
+                # self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
+                # self.axes[9].set_xticks([])
+                # self.axes[9].set_yticks([])
+                # self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
 
             elif clade == 'C':
                 axes = [*self.axes[:4]]
@@ -998,12 +998,12 @@ class HierarchicalPlot(SchuppFigures):
                 cluster_to_number_map = {'C1': 0, 'C50c': 0.25, 'C66': 0.5, 'other': 1}
                 # c_clustering_dict = {uid: cluster_to_number_map[self.c_clustering_dict[uid]] for uid in
                 #                      self.c_sample_uids_to_plot_non_filtered}
-                dendrogram_sample_uid_order = self._plot_for_clade(
+                dendrogram_sample_uid_order, spb = self._plot_for_clade(
                     axes=axes, clade_list=clade_list,
                     dist_output_path=dist_output_path,
                     sample_uids_to_plot=self.c_sample_uids_to_plot_non_filtered,
                     cluster_dict=self.c_clustering_dict, cluster_c_map=self.c_cluster_c_map)
-
+                spb.plot_only_legend(seq_leg_ax=self.axes[-1])
                 foo = 'bar'
                 c_map = cm.get_cmap('plasma')
                 filter_color_dict = {1: 'white', 0: 'black'}
@@ -1031,17 +1031,17 @@ class HierarchicalPlot(SchuppFigures):
                 self.axes[7].set_yticks([])
                 self.axes[7].set_ylabel('post-MED\nunique', fontsize='small')
 
-                post_med_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
-                                            dendrogram_sample_uid_order]
-                self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
-                self.axes[8].set_xticks([])
-                self.axes[8].set_yticks([])
-                self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
-                ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
-                self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
-                self.axes[9].set_xticks([])
-                self.axes[9].set_yticks([])
-                self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
+                # post_med_relative_values = [self.c_sample_uid_to_relative_genera_abund_dict[_] for _ in
+                #                             dendrogram_sample_uid_order]
+                # self.plot_categorical_bars(ax=self.axes[8], cat_list=post_med_relative_values, c_map=c_map)
+                # self.axes[8].set_xticks([])
+                # self.axes[8].set_yticks([])
+                # self.axes[8].set_ylabel('post-MED\nrelative abund.', fontsize='small')
+                # ex_relative = [1 if _ >= 0.25 else 0 for _ in post_med_relative_values]
+                # self.plot_categorical_bars(ax=self.axes[9], cat_list=ex_relative, c_map=filter_color_dict)
+                # self.axes[9].set_xticks([])
+                # self.axes[9].set_yticks([])
+                # self.axes[9].set_ylabel('post-MED\nrelative abund.', fontsize='small')
 
             plt.tight_layout()
             print('saving svg')
@@ -1186,7 +1186,7 @@ class HierarchicalPlot(SchuppFigures):
         axes[1].set_ylabel('ITS2 sequence\ndiversity', fontsize='small')
         axes[2].set_ylabel('assigned\ncluster', fontsize='small')
         axes[3].set_ylabel('host\nspecies', fontsize='small')
-        return dendrogram_sample_uid_order
+        return dendrogram_sample_uid_order, spb
 
     def plot_categorical_bars(self, ax, cat_list, c_map):
         # TODO accept an acutal colour map and use this for the rectangles
